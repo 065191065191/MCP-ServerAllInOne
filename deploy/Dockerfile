@@ -1,5 +1,5 @@
 # Образ: stack-mcp-ui (порт 8888) и stack-mcp по HTTP (по умолчанию 8765, /mcp).
-# Сборка: docker build -f deploy/Dockerfile -t stack-mcp-ui:0.2.0 .
+# Сборка: docker build -f deploy/Dockerfile -t stack-mcp-ui:0.2.1 .
 FROM python:3.12-slim-bookworm AS runtime
 
 RUN apt-get update \

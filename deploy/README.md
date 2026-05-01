@@ -2,15 +2,15 @@
 
 ## Готовый образ (архив)
 
-После локальной сборки в каталоге может лежать **`stack-mcp-ui-0.2.0.tar`** (`docker save`). Файл в `.gitignore` из‑за размера. Импорт на целевой машине:
+После локальной сборки в каталоге может лежать **`stack-mcp-ui-0.2.1.tar`** (`docker save`). Файл в `.gitignore` из‑за размера. Импорт на целевой машине:
 
 ```bash
-docker load -i stack-mcp-ui-0.2.0.tar
+docker load -i stack-mcp-ui-0.2.1.tar
 # затем, например:
 docker run --rm -p 127.0.0.1:8888:8888 \
   -e STACK_MCP_CONFIG=/etc/stack-mcp/config.yaml \
   -v /path/on/host/config.yaml:/etc/stack-mcp/config.yaml:ro \
-  stack-mcp-ui:0.2.0
+  stack-mcp-ui:0.2.1
 
 # Отдельно MCP по HTTP (Streamable HTTP на /mcp):
 docker run --rm -p 127.0.0.1:8765:8765 \
@@ -18,14 +18,14 @@ docker run --rm -p 127.0.0.1:8765:8765 \
   -e STACK_MCP_HOST=0.0.0.0 \
   -e STACK_MCP_PORT=8765 \
   -v /path/on/host/config.yaml:/etc/stack-mcp/config.yaml:ro \
-  stack-mcp-ui:0.2.0 stack-mcp
+  stack-mcp-ui:0.2.1 stack-mcp
 ```
 
 Пересобрать архив из корня репозитория:
 
 ```bash
-docker build -f deploy/Dockerfile -t stack-mcp-ui:0.2.0 .
-docker save stack-mcp-ui:0.2.0 -o deploy/stack-mcp-ui-0.2.0.tar
+docker build -f deploy/Dockerfile -t stack-mcp-ui:0.2.1 .
+docker save stack-mcp-ui:0.2.1 -o deploy/stack-mcp-ui-0.2.1.tar
 ```
 
 ## Состав
