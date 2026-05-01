@@ -78,6 +78,14 @@ modules:
     statement_timeout_seconds: 25
     long_query_limit: 20
     top_n_tables: 20
+    # Именованные SELECT только из списка; MCP-клиент / крон вызывает postgres_allowlisted_query(query_id).
+    allowlisted_queries: []
+    # Пример:
+    # allowlisted_queries:
+    #   - id: cron-ping
+    #     description: Проверка соединения
+    #     max_rows: 5
+    #     sql: SELECT 1 AS ok
     mtls_cert_file: null
     mtls_key_file: null
     mtls_root_ca_file: null

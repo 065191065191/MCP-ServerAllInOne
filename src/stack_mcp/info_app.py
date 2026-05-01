@@ -26,7 +26,9 @@ from stack_mcp.backend_tls import (
 from stack_mcp.config import AppConfig, load_config
 from stack_mcp.kafka_tools import kafka_broker_client_config
 from stack_mcp.mail_tools import mail_imap_verify
+from stack_mcp.mtls import resolve_mcp_mtls_uvicorn_kwargs
 from stack_mcp.opensearch_tools import connect_opensearch
+from stack_mcp.postgres_tools import postgres_allowlisted_query_catalog
 from stack_mcp.redis_tools import redis_ping, redis_setex
 from stack_mcp.server import build_mcp
 
@@ -48,13 +50,29 @@ _INVOKE_ALLOWLIST: dict[str, dict[str, Any] | None] = {
     "ssh_command_policy": {},
 }
 
-app = FastAPI(title="stack-mcp UI", version="0.2.4")
+app = FastAPI(title="stack-mcp UI", version="0.2.5")
 
 _trusted_hosts_raw = (os.environ.get("STACK_MCP_UI_TRUSTED_HOSTS") or "").strip()
 if _trusted_hosts_raw:
     _trusted_hosts = [h.strip() for h in _trusted_hosts_raw.split(",") if h.strip()]
     if _trusted_hosts:
         app.add_middleware(TrustedHostMiddleware, allowed_hosts=_trusted_hosts)
+
+
+def _embed_stack_mcp_if_enabled() -> None:
+    """Один порт с UI: Streamable HTTP MCP на пути /mcp (STACK_MCP_EMBED_MCP=true)."""
+    if (os.environ.get("STACK_MCP_EMBED_MCP") or "").strip().lower() not in ("1", "true", "yes"):
+        return
+    cfg = load_config()
+    mcp = build_mcp(cfg, streamable_http_path="/")
+    app.mount("/mcp", mcp.streamable_http_app())
+    logging.getLogger("stack_mcp.ui").info(
+        "Embedded stack-mcp: Streamable HTTP on same port as UI at path /mcp "
+        "(set STACK_MCP_EMBED_MCP=false to run stack-mcp on a separate port)."
+    )
+
+
+_embed_stack_mcp_if_enabled()
 
 _API_TOKEN = (os.environ.get("STACK_MCP_UI_TOKEN") or "").strip()
 _ENABLE_INVOKE = os.environ.get("STACK_MCP_UI_ENABLE_INVOKE", "false").strip().lower() == "true"
@@ -831,6 +849,59 @@ async def status_page() -> str:
     return _STATUS_HTML
 
 
+@app.get("/cron-page", response_class=HTMLResponse)
+async def cron_page() -> str:
+    return _CRON_HTML
+
+
+@app.get("/cron", response_class=HTMLResponse)
+async def cron_page_short() -> str:
+    return _CRON_HTML
+
+
+@app.get("/api/postgres-allowlist")
+async def api_postgres_allowlist(req: Request) -> JSONResponse:
+    """Список query_id из modules.postgres.allowlisted_queries (без текста SQL) — для крона и обзора в UI."""
+    started = time.perf_counter()
+    ok = False
+    try:
+        _secure_api(req, "postgres_allowlist")
+        cfg = _cfg()
+        pg = cfg.modules.postgres
+        if not pg.enabled:
+            ok = True
+            return JSONResponse(
+                {
+                    "postgres_enabled": False,
+                    "allowlist_configured": False,
+                    "queries": [],
+                    "detail": "модуль postgres выключен в конфиге",
+                }
+            )
+        if not pg.allowlisted_queries:
+            ok = True
+            return JSONResponse(
+                {
+                    "postgres_enabled": True,
+                    "allowlist_configured": False,
+                    "queries": [],
+                    "detail": "allowlisted_queries пуст — добавьте именованные SELECT в YAML; крон передаёт только query_id",
+                }
+            )
+        catalog = json.loads(postgres_allowlisted_query_catalog(pg))
+        ok = True
+        return JSONResponse(
+            {
+                "postgres_enabled": True,
+                "allowlist_configured": True,
+                "queries": catalog.get("queries", []),
+                "detail": None,
+            }
+        )
+    finally:
+        _record_request_timing(started, ok)
+
+
 _INDEX_HTML = """<!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -838,60 +909,315 @@ _INDEX_HTML = """<!DOCTYPE html>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>stack-mcp demo</title>
   <style>
-    :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
-    body { margin: 0 auto; max-width: 1100px; padding: 1.25rem; line-height: 1.45; }
-    h1 { font-size: 1.35rem; }
-    .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0.75rem; }
-    .card { border: 1px solid #8884; border-radius: 10px; padding: 0.75rem 0.9rem; }
-    .ok { color: #0a7; }
-    .bad { color: #c33; }
-    pre { white-space: pre-wrap; word-break: break-word; background: #0001; padding: 0.6rem; border-radius: 8px; max-height: 320px; overflow: auto; }
-    button { margin: 0.15rem 0.35rem 0.15rem 0; padding: 0.35rem 0.55rem; border-radius: 8px; border: 1px solid #8886; background: #fff3; cursor: pointer; }
+    :root {
+      color-scheme: light dark;
+      --bg: #f4f4f2;
+      --surface: #fdfdfc;
+      --text: #1a1a18;
+      --muted: #5e5e5a;
+      --border: rgba(26, 26, 24, 0.12);
+      --accent: #4a5d66;
+      --accent-soft: rgba(74, 93, 102, 0.14);
+      --ok: #2d6a4f;
+      --ok-bg: rgba(45, 106, 79, 0.12);
+      --bad: #9b2226;
+      --bad-bg: rgba(155, 34, 38, 0.1);
+      --skip: #7c5e10;
+      --skip-bg: rgba(124, 94, 16, 0.12);
+      --radius: 10px;
+      --radius-sm: 6px;
+      font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #141413;
+        --surface: #1c1c1a;
+        --text: #e8e8e4;
+        --muted: #9c9c96;
+        --border: rgba(232, 232, 228, 0.1);
+        --accent: #a8b8bf;
+        --accent-soft: rgba(168, 184, 191, 0.18);
+        --ok: #6bbf8a;
+        --ok-bg: rgba(107, 191, 138, 0.14);
+        --bad: #f08080;
+        --bad-bg: rgba(240, 128, 128, 0.12);
+        --skip: #e0c36a;
+        --skip-bg: rgba(224, 195, 106, 0.12);
+      }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--text); line-height: 1.55; }
+    .skip-link {
+      position: absolute;
+      left: -9999px;
+      z-index: 999;
+      padding: 0.5rem 1rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      text-decoration: none;
+    }
+    .skip-link:focus { left: 1rem; top: 1rem; }
+    .shell { max-width: 1080px; margin: 0 auto; padding: 1.5rem 1.15rem 2.5rem; }
+    .page-head {
+      padding: 0 0 1.1rem;
+      margin-bottom: 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .page-head h1 { margin: 0 0 0.4rem; font-size: 1.35rem; font-weight: 600; letter-spacing: -0.02em; }
+    .lede { margin: 0 0 0.75rem; color: var(--muted); font-size: 0.95rem; max-width: 52rem; }
+    .top-links { font-size: 0.9rem; display: flex; flex-wrap: wrap; gap: 0.35rem 1rem; align-items: baseline; }
+    .top-links a { color: var(--accent); text-decoration: none; font-weight: 500; border-bottom: 1px solid transparent; }
+    .top-links a:hover { border-bottom-color: var(--accent); }
+    .flow-list { margin: 0; padding: 0; list-style: none; counter-reset: step; }
+    .flow-list > li { counter-increment: step; margin-bottom: 1rem; padding-left: 2rem; position: relative; }
+    .flow-list > li::before {
+      content: counter(step);
+      position: absolute;
+      left: 0;
+      top: 0.1rem;
+      width: 1.35rem;
+      height: 1.35rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      line-height: 1.35rem;
+      text-align: center;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+    }
+    .step-title { margin: 0 0 0.35rem; font-size: 0.82rem; font-weight: 650; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem 1.15rem;
+      margin-bottom: 0.85rem;
+    }
+    .field-group { margin: 0.65rem 0 0; }
+    .field-label {
+      display: block;
+      font-size: 0.72rem;
+      font-weight: 650;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      margin-bottom: 0.35rem;
+    }
+    input[type="password"] {
+      width: min(480px, 100%);
+      padding: 0.5rem 0.7rem;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 0.9rem;
+    }
+    input[type="password"]:focus {
+      outline: 2px solid var(--accent);
+      outline-offset: 1px;
+    }
+    .btn-row { display: flex; flex-wrap: wrap; gap: 0.45rem; align-items: center; }
+    button {
+      padding: 0.45rem 0.8rem;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 0.86rem;
+      font-weight: 500;
+    }
+    button:hover { border-color: var(--accent); background: var(--accent-soft); }
+    button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    button.primary { border-color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+    button.primary:hover { filter: brightness(0.97); }
     button:disabled { opacity: 0.45; cursor: not-allowed; }
-    .muted { opacity: 0.75; font-size: 0.92rem; }
-    a { color: inherit; }
-    .nav { margin: 0.5rem 0 0.75rem; font-size: 0.95rem; }
-    .nav a { margin-right: 1rem; }
+    .tablist {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0;
+      border-bottom: 1px solid var(--border);
+      margin: 1rem 0 0;
+    }
+    .tablist button[role="tab"] {
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid transparent;
+      padding: 0.6rem 1rem;
+      margin-bottom: -1px;
+      color: var(--muted);
+      font-weight: 500;
+      font-size: 0.88rem;
+      cursor: pointer;
+      border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+    }
+    .tablist button[role="tab"]:hover { color: var(--text); background: var(--accent-soft); }
+    .tablist button[role="tab"][aria-selected="true"] {
+      color: var(--text);
+      border-bottom-color: var(--accent);
+      font-weight: 600;
+    }
+    .tablist button[role="tab"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    [role="tabpanel"] { padding: 1rem 0 0; }
+    [role="tabpanel"]:focus { outline: none; }
+    .section-title { margin: 0 0 0.35rem; font-size: 1rem; font-weight: 600; letter-spacing: -0.015em; }
+    .section-note { margin: 0 0 0.75rem; color: var(--muted); font-size: 0.88rem; max-width: 50rem; }
+    .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(236px, 1fr)); gap: 0.75rem; }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 0;
+      overflow: hidden;
+    }
+    .card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      padding: 0.55rem 0.75rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+    }
+    .card-head strong { font-size: 0.88rem; font-weight: 600; }
+    .badge {
+      font-size: 0.65rem;
+      font-weight: 650;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 0.18rem 0.45rem;
+      border-radius: 4px;
+      flex-shrink: 0;
+    }
+    .badge-ok { background: var(--ok-bg); color: var(--ok); }
+    .badge-bad { background: var(--bad-bg); color: var(--bad); }
+    .badge-skip { background: var(--skip-bg); color: var(--skip); }
+    .badge-on { background: var(--ok-bg); color: var(--ok); }
+    .badge-off { background: var(--border); color: var(--muted); }
+    .card pre {
+      margin: 0;
+      border: none;
+      border-radius: 0;
+      max-height: 280px;
+      background: var(--surface);
+    }
+    pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: var(--bg);
+      padding: 0.75rem 0.9rem;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      font-size: 0.76rem;
+      line-height: 1.45;
+      max-height: 320px;
+      overflow: auto;
+    }
+    #metrics-preview { max-height: 220px; }
+    #invoke-buttons { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.5rem 0; }
+    .muted { color: var(--muted); font-size: 0.88rem; margin: 0.3rem 0; }
+    code {
+      font-family: ui-monospace, "Cascadia Code", "SF Mono", Consolas, monospace;
+      font-size: 0.85em;
+      padding: 0.1em 0.32em;
+      border-radius: 3px;
+      background: var(--accent-soft);
+    }
+    .alert { margin: 0.5rem 0; padding: 0.6rem 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--bad); background: var(--bad-bg); color: var(--text); font-size: 0.86rem; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
   </style>
 </head>
 <body>
-  <h1>stack-mcp — демо UI</h1>
-  <p class="nav">
-    <a href="/status-page">Страница статуса /metrics</a>
-    <span class="muted">(тот же токен метрик, что ниже)</span>
-  </p>
-  <p class="muted">Для <code>/api/*</code>: если задан <code>STACK_MCP_UI_TOKEN</code> — нужен Bearer; по умолчанию токен не требуется.</p>
-  <p class="muted" id="auth-hint"></p>
-  <input id="token" type="password" placeholder="STACK_MCP_UI_TOKEN (опционально)" style="width: min(520px, 100%); padding: 0.45rem; border-radius: 8px; border: 1px solid #8886;" />
-  <p class="muted">Для <code>/metrics</code> (Prometheus) — отдельный секрет, если задан <code>STACK_MCP_METRICS_TOKEN</code>, или тот же UI token при <code>STACK_MCP_METRICS_ACCEPT_UI_BEARER=true</code>:</p>
-  <input id="metrics-token" type="password" placeholder="STACK_MCP_METRICS_TOKEN (опционально)" style="width: min(520px, 100%); padding: 0.45rem; border-radius: 8px; border: 1px solid #8886;" />
-  <p class="muted">Проверки идут напрямую в Docker-сервисы. Вызовы MCP — через <code>FastMCP.call_tool</code> (реальный сервер, не мок).</p>
-  <p class="muted" id="cfgpath"></p>
+  <a class="skip-link" href="#main">К основному содержимому</a>
+  <div class="shell">
+  <header class="page-head">
+    <h1>stack-mcp — демо UI</h1>
+    <p class="lede">Сначала доступ к API, затем обновление статуса. Подключение к сервисам и вспомогательные метрики — во вкладках ниже; вызовы MCP и запись данных — отдельно, чтобы не мешать обзору.</p>
+    <nav class="top-links" aria-label="Связанные страницы">
+      <a href="/status-page">Текст /metrics и очередь</a>
+      <a href="/cron-page">Крон и именованные SQL (Postgres)</a>
+      <span class="muted">Метрики — токен из шага 1</span>
+    </nav>
+  </header>
 
-  <div class="row" style="margin: 0.75rem 0;">
-    <button id="btn-refresh">Обновить статус</button>
-    <button id="btn-tools">Загрузить список MCP tools</button>
-    <button id="btn-seed">Seed данных (Postgres/Redis/OpenSearch/Kafka)</button>
-    <button id="btn-metrics">Обновить превью /metrics</button>
+  <ol class="flow-list">
+    <li>
+      <p class="step-title">Доступ</p>
+      <div class="panel">
+        <p class="muted">Если на сервере задан <code>STACK_MCP_UI_TOKEN</code>, для <code>/api/*</code> нужен Bearer. Для <code>/metrics</code> — <code>STACK_MCP_METRICS_TOKEN</code> или UI-токен при <code>STACK_MCP_METRICS_ACCEPT_UI_BEARER=true</code>.</p>
+        <p class="muted" id="auth-hint" aria-live="polite"></p>
+        <div class="field-group">
+          <label class="field-label" for="token">Токен UI / API</label>
+          <input id="token" type="password" placeholder="STACK_MCP_UI_TOKEN (если требуется)" autocomplete="off" />
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="metrics-token">Токен метрик</label>
+          <input id="metrics-token" type="password" placeholder="STACK_MCP_METRICS_TOKEN (если требуется)" autocomplete="off" />
+        </div>
+        <p class="muted" id="cfgpath" aria-live="polite"></p>
+      </div>
+    </li>
+    <li>
+      <p class="step-title">Актуальные данные</p>
+      <div class="panel">
+        <p class="muted">Обновляет карточки модулей и проверок. Остальные действия (список tools, seed, превью метрик) — во вкладках, где они уместнее.</p>
+        <div class="btn-row">
+          <button type="button" class="primary" id="btn-refresh">Обновить статус</button>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <p id="status-error" class="alert" role="alert" hidden></p>
+
+  <div id="main" tabindex="-1">
+    <span id="tabs-label" class="sr-only">Разделы подробностей</span>
+    <div class="tablist" role="tablist" aria-labelledby="tabs-label">
+      <button type="button" role="tab" id="tab-services" aria-selected="true" aria-controls="panel-services">Сервисы</button>
+      <button type="button" role="tab" id="tab-observe" aria-selected="false" aria-controls="panel-observe" tabindex="-1">Наблюдение</button>
+      <button type="button" role="tab" id="tab-mcp" aria-selected="false" aria-controls="panel-mcp" tabindex="-1">MCP и отладка</button>
+    </div>
+
+    <div id="panel-services" role="tabpanel" aria-labelledby="tab-services">
+      <h2 class="section-title">Модули в конфиге</h2>
+      <p class="section-note">Что включено в <code>stack_mcp_status</code>: postgres, redis, kafka, prometheus, mail, opensearch, ssh.</p>
+      <div class="row" id="modules-config"></div>
+      <h2 class="section-title" style="margin-top:1.25rem;">Доступность интеграций</h2>
+      <p class="section-note">Прямые проверки к зависимостям. Сбой здесь обычно важнее, чем вспомогательные счётчики во вкладке «Наблюдение».</p>
+      <div class="row" id="status-core"></div>
+    </div>
+
+    <div id="panel-observe" role="tabpanel" aria-labelledby="tab-observe" hidden>
+      <h2 class="section-title">Очередь и лимиты</h2>
+      <p class="section-note"><strong>kafka_queue</strong> — оценка объёма сообщений по allowlist (не замена мониторинга кластера). <strong>ui_rate_limiter</strong> — нагрузка на <code>/api/*</code>, не статус брокеров или БД.</p>
+      <div class="row" id="status-aux"></div>
+      <h2 class="section-title" style="margin-top:1.25rem;">Текст /metrics</h2>
+      <p class="section-note">Сырой вывод для Prometheus; нужен токен метрик, если сервер его требует.</p>
+      <div class="btn-row" style="margin-bottom:0.5rem;">
+        <button type="button" id="btn-metrics">Обновить превью /metrics</button>
+      </div>
+      <pre id="metrics-preview">—</pre>
+    </div>
+
+    <div id="panel-mcp" role="tabpanel" aria-labelledby="tab-mcp" hidden>
+      <h2 class="section-title">Инструменты MCP</h2>
+      <p class="section-note">Справочный список; не влияет на работу сервисов.</p>
+      <div class="btn-row">
+        <button type="button" id="btn-tools">Загрузить список tools</button>
+      </div>
+      <pre id="tools">—</pre>
+      <h2 class="section-title" style="margin-top:1.25rem;">Вызовы из UI (allowlist)</h2>
+      <p class="section-note">Кнопки дергают <code>FastMCP.call_tool</code> на сервере. <strong>Seed</strong> пишет тестовые данные — используйте осознанно.</p>
+      <div class="btn-row">
+        <button type="button" id="btn-seed">Seed (Postgres / Redis / OpenSearch / Kafka)</button>
+      </div>
+      <div id="invoke-buttons"></div>
+      <p class="muted" id="invoke-label"><strong>Ответ</strong></p>
+      <pre id="invoke-out" aria-labelledby="invoke-label">—</pre>
+    </div>
   </div>
-
-  <h2>Модули MCP (включено в конфиге)</h2>
-  <p class="muted">Те же флаги, что в <code>stack_mcp_status</code>: postgres, redis, kafka, prometheus, mail, opensearch, ssh.</p>
-  <div class="row" id="modules-config"></div>
-
-  <h2>Проверки доступности</h2>
-  <p class="muted"><strong>kafka_queue</strong> — оценка «сколько сообщений в топиках» по allowlist (end−begin оффсетов), для сценариев с Kafka/Prometheus; нужен доступ к брокеру как у карточки kafka. <strong>ui_rate_limiter</strong> — счётчики лимита запросов к <code>/api/*</code>, не ошибка сервиса. <strong>ssh skipped</strong> — в конфиге <code>modules.ssh.enabled: false</code> (в <code>config.docker.yaml</code> модуль по умолчанию не включён).</p>
-  <div class="row" id="status"></div>
-
-  <h2>Prometheus: превью /metrics</h2>
-  <pre id="metrics-preview" style="max-height: 240px;">—</pre>
-
-  <h2>MCP tools</h2>
-  <pre id="tools">—</pre>
-
-  <h2>Вызов MCP (allowlist)</h2>
-  <div id="invoke-buttons"></div>
-  <pre id="invoke-out">—</pre>
+  </div>
 
   <script>
     const $ = (id) => document.getElementById(id);
@@ -913,20 +1239,22 @@ _INDEX_HTML = """<!DOCTYPE html>
       const el = document.createElement('div');
       el.className = 'card';
       if (obj && obj.info === true) {
-        el.innerHTML = '<strong>' + title + '</strong> <span class="muted">info</span>' +
+        el.innerHTML = '<div class="card-head"><strong>' + title + '</strong><span class="badge badge-skip">info</span></div>' +
           '<pre>' + JSON.stringify(obj, null, 2) + '</pre>';
         return el;
       }
-      const ok = obj && (obj.ok === true || obj.skipped === true);
-      const flag = obj && obj.skipped ? 'skipped' : (obj && obj.ok ? 'ok' : 'bad');
-      el.innerHTML = '<strong>' + title + '</strong> <span class="' + flag + '">' + (obj && obj.skipped ? 'skipped' : (obj && obj.ok ? 'ok' : 'fail')) + '</span>' +
+      const badgeClass = obj && obj.skipped ? 'badge-skip' : (obj && obj.ok ? 'badge-ok' : 'badge-bad');
+      const badgeText = obj && obj.skipped ? 'skipped' : (obj && obj.ok ? 'ok' : 'fail');
+      el.innerHTML = '<div class="card-head"><strong>' + title + '</strong><span class="badge ' + badgeClass + '">' + badgeText + '</span></div>' +
         '<pre>' + JSON.stringify(obj, null, 2) + '</pre>';
       return el;
     }
     function moduleChip(name, on) {
       const el = document.createElement('div');
       el.className = 'card';
-      el.innerHTML = '<strong>' + name + '</strong> <span class="' + (on ? 'ok' : 'muted') + '">' + (on ? 'on' : 'off') + '</span>';
+      const b = on ? 'badge-on' : 'badge-off';
+      const t = on ? 'on' : 'off';
+      el.innerHTML = '<div class="card-head"><strong>' + name + '</strong><span class="badge ' + b + '">' + t + '</span></div>';
       return el;
     }
     function renderModulesEnabled(m) {
@@ -939,20 +1267,52 @@ _INDEX_HTML = """<!DOCTYPE html>
         }
       });
     }
+    function initTabs() {
+      const tablist = document.querySelector('[role="tablist"]');
+      const tabs = Array.from(tablist.querySelectorAll('[role="tab"]'));
+      const panels = tabs.map((t) => $(t.getAttribute('aria-controls')));
+      function select(i) {
+        tabs.forEach((tab, j) => {
+          const on = j === i;
+          tab.setAttribute('aria-selected', on);
+          tab.tabIndex = on ? 0 : -1;
+          panels[j].hidden = !on;
+        });
+      }
+      tabs.forEach((tab, i) => {
+        tab.addEventListener('click', () => { select(i); tab.focus(); });
+        tab.addEventListener('keydown', (e) => {
+          let n = i;
+          if (e.key === 'ArrowRight') { e.preventDefault(); n = (i + 1) % tabs.length; }
+          else if (e.key === 'ArrowLeft') { e.preventDefault(); n = (i - 1 + tabs.length) % tabs.length; }
+          else if (e.key === 'Home') { e.preventDefault(); n = 0; }
+          else if (e.key === 'End') { e.preventDefault(); n = tabs.length - 1; }
+          else { return; }
+          select(n);
+          tabs[n].focus();
+        });
+      });
+      select(0);
+    }
     async function refreshStatus() {
+      const err = $('status-error');
+      err.hidden = true;
+      err.textContent = '';
       const s = await jget('/api/status');
       renderModulesEnabled(s.modules_enabled);
-      const host = $('status');
-      host.innerHTML = '';
-      host.appendChild(card('postgres', s.postgres));
-      host.appendChild(card('redis', s.redis));
-      host.appendChild(card('kafka', s.kafka));
-      host.appendChild(card('prometheus', s.prometheus));
-      host.appendChild(card('opensearch', s.opensearch));
-      host.appendChild(card('mail', s.mail));
-      host.appendChild(card('ssh', s.ssh));
-      host.appendChild(card('kafka_queue', s.kafka_queue));
-      host.appendChild(card('ui_rate_limiter', s.ui_rate_limiter));
+      const core = $('status-core');
+      core.innerHTML = '';
+      core.appendChild(card('postgres', s.postgres));
+      core.appendChild(card('redis', s.redis));
+      core.appendChild(card('kafka', s.kafka));
+      core.appendChild(card('prometheus', s.prometheus));
+      core.appendChild(card('opensearch', s.opensearch));
+      core.appendChild(card('mail', s.mail));
+      core.appendChild(card('ssh', s.ssh));
+      const aux = $('status-aux');
+      aux.innerHTML = '';
+      aux.appendChild(card('kafka_queue', s.kafka_queue));
+      aux.appendChild(card('ui_rate_limiter', s.ui_rate_limiter));
     }
     async function refreshMetricsPreview() {
       const r = await fetch('/metrics', { headers: metricsAuthHeader() });
@@ -986,6 +1346,7 @@ _INDEX_HTML = """<!DOCTYPE html>
       host.innerHTML = '';
       allowed.forEach(n => {
         const b = document.createElement('button');
+        b.type = 'button';
         b.textContent = n;
         b.onclick = () => invoke(n);
         host.appendChild(b);
@@ -1001,32 +1362,40 @@ _INDEX_HTML = """<!DOCTYPE html>
       try {
         const ac = await fetch('/api/auth-config').then((r) => r.json());
         if (ac.ui_bearer_enabled) {
-          $('auth-hint').textContent = 'Сервер ожидает Bearer (STACK_MCP_UI_TOKEN) для /api/*.';
+          $('auth-hint').textContent = 'Сейчас: для /api/* нужен Bearer (STACK_MCP_UI_TOKEN).';
         } else {
-          $('auth-hint').textContent = 'Сервер: /api/* без Bearer (STACK_MCP_UI_TOKEN не задан).';
+          $('auth-hint').textContent = 'Сейчас: /api/* без Bearer (токен UI на сервере не задан).';
         }
       } catch (e) {
         $('auth-hint').textContent = '';
       }
       try {
         const c = await jget('/api/config-path');
-        $('cfgpath').textContent = 'STACK_MCP_CONFIG: ' + (c.path || '(не задан)') + (c.exists ? ' (ok)' : ' (файл не найден)');
+        $('cfgpath').textContent = 'Конфиг: STACK_MCP_CONFIG=' + (c.path || '(не задан)') + (c.exists ? ' — файл найден' : ' — файл не найден');
       } catch (e) {
-        $('cfgpath').textContent = 'config path error: ' + e;
+        $('cfgpath').textContent = 'Конфиг: ошибка — ' + e;
       }
       buildInvokeButtons();
-      $('btn-refresh').onclick = () => refreshStatus().catch(e => alert(e));
+      initTabs();
+      $('btn-refresh').onclick = () => refreshStatus().catch(e => {
+        const err = $('status-error');
+        err.hidden = false;
+        err.textContent = String(e);
+      });
       $('btn-tools').onclick = () => loadTools().catch(e => alert(e));
       $('btn-seed').onclick = () => seed().catch(e => alert(e));
       $('btn-metrics').onclick = () => refreshMetricsPreview().catch(e => { $('metrics-preview').textContent = String(e); });
-      await refreshStatus().catch(e => { $('status').textContent = String(e); });
+      await refreshStatus().catch(e => {
+        const err = $('status-error');
+        err.hidden = false;
+        err.textContent = String(e);
+      });
       await refreshMetricsPreview().catch(e => { $('metrics-preview').textContent = String(e); });
     }
     boot();
   </script>
 </body>
-</html>
-"""
+</html>"""
 
 _STATUS_HTML = """<!DOCTYPE html>
 <html lang="ru">
@@ -1035,20 +1404,99 @@ _STATUS_HTML = """<!DOCTYPE html>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>stack-mcp status</title>
   <style>
-    :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
-    body { margin: 0 auto; max-width: 1100px; padding: 1.25rem; line-height: 1.45; }
-    pre { white-space: pre-wrap; word-break: break-word; background: #0001; padding: 0.6rem; border-radius: 8px; }
-    .muted { opacity: 0.8; }
-    input { width: min(520px, 100%); padding: 0.45rem; border-radius: 8px; border: 1px solid #8886; }
+    :root {
+      color-scheme: light dark;
+      --bg: #f0f2f5;
+      --surface: #ffffff;
+      --text: #1c1d1f;
+      --muted: #5c5f66;
+      --border: rgba(28, 29, 31, 0.12);
+      --accent: #2563eb;
+      --accent-soft: rgba(37, 99, 235, 0.1);
+      --shadow: 0 1px 2px rgba(28, 29, 31, 0.06), 0 4px 12px rgba(28, 29, 31, 0.06);
+      --radius: 12px;
+      --radius-sm: 8px;
+      font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #12141a;
+        --surface: #1e222d;
+        --text: #e8eaed;
+        --muted: #9aa0a8;
+        --border: rgba(232, 234, 237, 0.12);
+        --accent: #60a5fa;
+        --accent-soft: rgba(96, 165, 250, 0.15);
+        --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 24px rgba(0, 0, 0, 0.35);
+      }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--text); line-height: 1.55; }
+    .shell { max-width: 1120px; margin: 0 auto; padding: 1.75rem 1.35rem 3rem; }
+    .hero {
+      background: linear-gradient(135deg, var(--surface) 0%, var(--bg) 100%);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.25rem 1.4rem;
+      margin-bottom: 1.25rem;
+      box-shadow: var(--shadow);
+    }
+    .hero h1 { margin: 0 0 0.5rem; font-size: 1.35rem; font-weight: 650; letter-spacing: -0.03em; }
+    .back { margin: 0; }
+    .back a { color: var(--accent); text-decoration: none; font-weight: 500; font-size: 0.9rem; }
+    .back a:hover { text-decoration: underline; text-underline-offset: 3px; }
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem 1.15rem;
+      margin-bottom: 1rem;
+      box-shadow: var(--shadow);
+    }
+    .muted { color: var(--muted); font-size: 0.9rem; margin: 0.4rem 0; }
+    code {
+      font-family: ui-monospace, "Cascadia Code", "SF Mono", Consolas, monospace;
+      font-size: 0.86em;
+      padding: 0.12em 0.35em;
+      border-radius: 4px;
+      background: var(--accent-soft);
+    }
+    input {
+      width: min(520px, 100%);
+      padding: 0.55rem 0.75rem;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 0.9rem;
+    }
+    input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+    pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: var(--bg);
+      padding: 0.85rem 1rem;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      font-size: 0.78rem;
+      line-height: 1.45;
+      margin: 0;
+    }
   </style>
 </head>
 <body>
-  <h1>MCP status / queue</h1>
-  <p class="muted"><a href="/">← Демо UI</a></p>
-  <p class="muted">Данные с <code>/metrics</code>. Если на сервере задан <code>STACK_MCP_METRICS_TOKEN</code> (или включён приём UI Bearer), введите тот же секрет ниже — он уходит только в заголовке <code>Authorization</code>, не в URL.</p>
-  <p class="muted">JSON <code>/api/status</code> — с Bearer только если на сервере задан <code>STACK_MCP_UI_TOKEN</code>.</p>
-  <p><input id="mtok" type="password" placeholder="STACK_MCP_METRICS_TOKEN (если требуется)" autocomplete="off" /></p>
+  <div class="shell">
+  <header class="hero">
+    <p class="back"><a href="/">← Демо UI</a> · <a href="/cron-page">Крон / allowlist Postgres</a></p>
+    <h1>Статус и /metrics</h1>
+  </header>
+  <div class="panel">
+    <p class="muted">Данные с <code>/metrics</code>. При <code>STACK_MCP_METRICS_TOKEN</code> (или UI Bearer) введите секрет — только заголовок <code>Authorization</code>, не URL.</p>
+    <p class="muted">JSON <code>/api/status</code> — Bearer, если на сервере задан <code>STACK_MCP_UI_TOKEN</code>.</p>
+    <input id="mtok" type="password" placeholder="STACK_MCP_METRICS_TOKEN (если требуется)" autocomplete="off" />
+  </div>
   <pre id="out">Loading /metrics...</pre>
+  </div>
   <script>
     const $ = (id) => document.getElementById(id);
     function metricsHeaders() {
@@ -1064,6 +1512,144 @@ _STATUS_HTML = """<!DOCTYPE html>
     $('mtok').onchange = () => localStorage.setItem('stack_mcp_metrics_token', $('mtok').value || '');
     load().catch(e => { $('out').textContent = String(e); });
     setInterval(() => load().catch(() => {}), 15000);
+  </script>
+</body>
+</html>
+"""
+
+_CRON_HTML = """<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>stack-mcp — крон и allowlist Postgres</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f4f4f2;
+      --surface: #fdfdfc;
+      --text: #1a1a18;
+      --muted: #5e5e5a;
+      --border: rgba(26, 26, 24, 0.12);
+      --accent: #4a5d66;
+      --accent-soft: rgba(74, 93, 102, 0.14);
+      --radius: 10px;
+      --radius-sm: 6px;
+      font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #141413;
+        --surface: #1c1c1a;
+        --text: #e8e8e4;
+        --muted: #9c9c96;
+        --border: rgba(232, 232, 228, 0.1);
+        --accent: #a8b8bf;
+        --accent-soft: rgba(168, 184, 191, 0.18);
+      }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--text); line-height: 1.55; }
+    .shell { max-width: 720px; margin: 0 auto; padding: 1.5rem 1.15rem 2.5rem; }
+    .page-head { padding-bottom: 1rem; margin-bottom: 1rem; border-bottom: 1px solid var(--border); }
+    .page-head h1 { margin: 0 0 0.5rem; font-size: 1.25rem; font-weight: 600; }
+    .nav { font-size: 0.9rem; margin: 0 0 0.75rem; }
+    .nav a { color: var(--accent); text-decoration: none; font-weight: 500; }
+    .nav a:hover { text-decoration: underline; text-underline-offset: 3px; }
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem 1.1rem;
+      margin-bottom: 1rem;
+    }
+    .muted { color: var(--muted); font-size: 0.9rem; margin: 0.4rem 0; }
+    ol { margin: 0.5rem 0 0; padding-left: 1.2rem; }
+    ol li { margin: 0.35rem 0; }
+    code {
+      font-family: ui-monospace, "Cascadia Code", "SF Mono", Consolas, monospace;
+      font-size: 0.85em;
+      padding: 0.1em 0.32em;
+      border-radius: 3px;
+      background: var(--accent-soft);
+    }
+    .field-label { display: block; font-size: 0.72rem; font-weight: 650; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin: 0.75rem 0 0.35rem; }
+    input[type="password"] {
+      width: min(480px, 100%);
+      padding: 0.5rem 0.7rem;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 0.9rem;
+    }
+    input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    button {
+      margin-top: 0.75rem;
+      padding: 0.45rem 0.85rem;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      font-size: 0.86rem;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    button:hover { border-color: var(--accent); background: var(--accent-soft); }
+    button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: var(--bg);
+      padding: 0.75rem 0.9rem;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      font-size: 0.78rem;
+      margin: 0.75rem 0 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+  <header class="page-head">
+    <p class="nav"><a href="/">← Демо UI</a> · <a href="/status-page">/metrics</a></p>
+    <h1>Крон и именованные запросы Postgres</h1>
+    <p class="muted">В stack-mcp <strong>нет встроенного планировщика</strong>. Внешний крон (systemd, Kubernetes CronJob, CI) вызывает MCP-инструмент <code>postgres_allowlisted_query</code> с аргументом <code>query_id</code>. Текст SQL хранится только в <code>modules.postgres.allowlisted_queries</code> в YAML — клиенты и крон передают лишь id.</p>
+  </header>
+  <div class="panel">
+    <p class="muted"><strong>Как пользоваться</strong></p>
+    <ol>
+      <li>Администратор добавляет в конфиг записи <code>allowlisted_queries</code> с полями <code>id</code>, <code>sql</code>, <code>description</code>, <code>max_rows</code>.</li>
+      <li>Крон вызывает MCP (тот же процесс или отдельный <code>stack-mcp</code>): сначала при необходимости <code>postgres_allowlisted_query_catalog</code>, затем <code>postgres_allowlisted_query</code> с нужным <code>query_id</code>.</li>
+      <li>При <code>STACK_MCP_EMBED_MCP=true</code> Streamable HTTP обычно на <code>/mcp</code> этого же порта, что и UI.</li>
+    </ol>
+  </div>
+  <div class="panel">
+    <p class="muted">Каталог id (без текста SQL) доступен по <code>GET /api/postgres-allowlist</code> с тем же Bearer, что и для других <code>/api/*</code>, если задан <code>STACK_MCP_UI_TOKEN</code>.</p>
+    <label class="field-label" for="tok">STACK_MCP_UI_TOKEN (если требуется)</label>
+    <input id="tok" type="password" placeholder="Bearer для /api/*" autocomplete="off" />
+    <button type="button" id="btn">Загрузить каталог query_id</button>
+    <pre id="out">Нажмите «Загрузить»…</pre>
+  </div>
+  </div>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    function h() {
+      const t = ($('tok').value || '').trim();
+      return t ? { 'Authorization': 'Bearer ' + t } : {};
+    }
+    $('tok').value = localStorage.getItem('stack_mcp_ui_token') || '';
+    $('tok').onchange = () => localStorage.setItem('stack_mcp_ui_token', $('tok').value || '');
+    $('btn').onclick = async () => {
+      $('out').textContent = '…';
+      try {
+        const r = await fetch('/api/postgres-allowlist', { headers: h() });
+        const txt = await r.text();
+        $('out').textContent = r.ok ? JSON.stringify(JSON.parse(txt), null, 2) : txt;
+      } catch (e) {
+        $('out').textContent = String(e);
+      }
+    };
   </script>
 </body>
 </html>
@@ -1108,13 +1694,28 @@ def main() -> None:
     log_level = (os.environ.get("STACK_MCP_LOG_LEVEL") or "info").strip().lower()
     if workers > 1:
         log.info("Uvicorn workers=%s (STACK_MCP_UI_WORKERS)", workers)
+    if (
+        workers > 1
+        and (os.environ.get("STACK_MCP_EMBED_MCP") or "").strip().lower() in ("1", "true", "yes")
+    ):
+        log.warning(
+            "STACK_MCP_EMBED_MCP with STACK_MCP_UI_WORKERS>1 can break MCP Streamable HTTP sessions; "
+            "use STACK_MCP_UI_WORKERS=1."
+        )
+    run_kw: dict[str, Any] = {
+        "host": host,
+        "port": port,
+        "workers": workers,
+        "reload": False,
+        "log_level": log_level,
+    }
+    ssl_kw = resolve_mcp_mtls_uvicorn_kwargs(log)
+    if ssl_kw:
+        run_kw.update(ssl_kw)
+        log.info("HTTPS + mTLS for UI and embedded /mcp (STACK_MCP_MTLS_*).")
     uvicorn.run(
         "stack_mcp.info_app:app",
-        host=host,
-        port=port,
-        workers=workers,
-        reload=False,
-        log_level=log_level,
+        **run_kw,
     )
 
 

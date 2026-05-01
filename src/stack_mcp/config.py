@@ -9,6 +9,7 @@ import yaml
 from pydantic import BaseModel, Field, model_validator
 
 from stack_mcp.backend_tls import validate_client_mtls_triplet_files
+from stack_mcp.postgres_allowlist_sql import normalize_and_validate_allowlisted_sql
 
 
 class OpenSearchRagConfig(BaseModel):
@@ -131,6 +132,20 @@ class KafkaModuleConfig(ModuleClientMtlsMixin):
         return self
 
 
+class PostgresAllowlistedQuery(BaseModel):
+    """Именованный SELECT из конфига; MCP-клиенты передают только id (крон — обычный клиент)."""
+
+    id: str = Field(
+        min_length=1,
+        max_length=64,
+        pattern=r"^[a-zA-Z][-a-zA-Z0-9_]*$",
+        description="Стабильный идентификатор для postgres_allowlisted_query",
+    )
+    sql: str = Field(min_length=1, description="Один SELECT или WITH … SELECT; только read-only")
+    description: str = Field(default="", max_length=500)
+    max_rows: int = Field(default=500, ge=1, le=10_000)
+
+
 class PostgresModuleConfig(ModuleClientMtlsMixin):
     enabled: bool = False
     dsn: str = "postgresql://user:pass@localhost:5432/dbname"
@@ -139,6 +154,21 @@ class PostgresModuleConfig(ModuleClientMtlsMixin):
     statement_timeout_seconds: int = 25
     long_query_limit: int = 20
     top_n_tables: int = 20
+    allowlisted_queries: list[PostgresAllowlistedQuery] = Field(
+        default_factory=list,
+        description="Разрешённые по id запросы для postgres_allowlisted_query / каталога",
+    )
+
+    @model_validator(mode="after")
+    def _validate_postgres_allowlist(self) -> Self:
+        if not self.allowlisted_queries:
+            return self
+        ids = [q.id for q in self.allowlisted_queries]
+        if len(ids) != len(set(ids)):
+            raise ValueError("postgres.allowlisted_queries: duplicate id")
+        for q in self.allowlisted_queries:
+            normalize_and_validate_allowlisted_sql(q.sql)
+        return self
 
 
 class RedisModuleConfig(ModuleClientMtlsMixin):

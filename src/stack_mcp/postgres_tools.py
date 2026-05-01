@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 import psycopg
@@ -10,6 +11,8 @@ from psycopg.rows import dict_row
 
 from stack_mcp.backend_tls import make_postgres_conninfo
 from stack_mcp.config import PostgresModuleConfig
+
+_ALLOWLISTED_QUERY_ID = re.compile(r"^[a-zA-Z][-a-zA-Z0-9_]*$")
 
 
 def _ensure_db_allowed(cfg: PostgresModuleConfig) -> None:
@@ -260,3 +263,46 @@ def postgres_statements_top(cfg: PostgresModuleConfig) -> str:
             )
             rows = _rows(cur)
     return json.dumps(rows, indent=2, default=str)
+
+
+def postgres_allowlisted_query_catalog(cfg: PostgresModuleConfig) -> str:
+    """Список разрешённых query_id (без текста SQL) для внешних MCP-клиентов и крона."""
+    queries = [
+        {"id": q.id, "description": q.description, "max_rows": q.max_rows}
+        for q in cfg.allowlisted_queries
+    ]
+    return json.dumps({"queries": queries}, indent=2, ensure_ascii=False)
+
+
+def postgres_allowlisted_query(cfg: PostgresModuleConfig, query_id: str) -> str:
+    """Выполнить один запрос из modules.postgres.allowlisted_queries по id (только allowlist в конфиге)."""
+    qid = (query_id or "").strip()
+    if not qid:
+        raise ValueError("query_id must be non-empty")
+    if not _ALLOWLISTED_QUERY_ID.match(qid):
+        raise ValueError("query_id must match pattern [a-zA-Z][-a-zA-Z0-9_]* (same as in config)")
+    entry = next((q for q in cfg.allowlisted_queries if q.id == qid), None)
+    if entry is None:
+        raise PermissionError(
+            f"query_id {qid!r} not in allowlisted_queries; use postgres_allowlisted_query_catalog"
+        )
+    max_rows = max(1, min(entry.max_rows, 10_000))
+    with _connect(cfg) as conn:
+        with conn.cursor() as cur:
+            cur.execute(entry.sql)
+            batch = cur.fetchmany(max_rows + 1)
+    truncated = len(batch) > max_rows
+    rows = batch[:max_rows]
+    return json.dumps(
+        {
+            "query_id": entry.id,
+            "description": entry.description,
+            "row_count": len(rows),
+            "truncated": truncated,
+            "max_rows": max_rows,
+            "rows": rows,
+        },
+        indent=2,
+        default=str,
+        ensure_ascii=False,
+    )

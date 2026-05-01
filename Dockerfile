@@ -1,5 +1,5 @@
 ﻿# См. deploy/Dockerfile — канонический прод-образ (UI + бинарники MCP).
-# Сборка из корня: docker build -f deploy/Dockerfile -t stack-mcp:0.2.4 .
+# Сборка из корня: docker build -f deploy/Dockerfile -t stack-mcp:0.2.5 .
 
 FROM python:3.12-slim-bookworm
 
@@ -18,13 +18,14 @@ RUN pip install --no-cache-dir --upgrade pip \
 
 USER stackmcp
 LABEL org.opencontainers.image.title="stack-mcp-server"
-LABEL org.opencontainers.image.version="0.3.0"
+LABEL org.opencontainers.image.version="0.2.5"
 
 ENV PYTHONUNBUFFERED=1 \
     STACK_MCP_UI_HOST=0.0.0.0 \
-    STACK_MCP_UI_PORT=8888
+    STACK_MCP_UI_PORT=8888 \
+    STACK_MCP_EMBED_MCP=true
 
-EXPOSE 8888 8765
+EXPOSE 8888
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
     CMD curl -fsS http://127.0.0.1:8888/health || exit 1

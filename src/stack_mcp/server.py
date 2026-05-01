@@ -86,6 +86,18 @@ def _register_postgres(mcp: FastMCP, cfg: PostgresModuleConfig) -> None:
         """Safe diagnostics: top statements by total time (requires pg_stat_statements)."""
         return postgres_tools.postgres_statements_top(cfg)
 
+    if cfg.allowlisted_queries:
+
+        @mcp.tool()
+        def postgres_allowlisted_query_catalog() -> str:
+            """Allowlisted SQL query ids and descriptions (no SQL text); use before postgres_allowlisted_query."""
+            return postgres_tools.postgres_allowlisted_query_catalog(cfg)
+
+        @mcp.tool()
+        def postgres_allowlisted_query(query_id: str) -> str:
+            """Run one SELECT from config allowlist by query_id (MCP cron passes id only, not raw SQL)."""
+            return postgres_tools.postgres_allowlisted_query(cfg, query_id)
+
 
 def _register_redis(mcp: FastMCP, cfg: RedisModuleConfig) -> None:
     @mcp.tool()
@@ -407,11 +419,13 @@ def build_mcp(
     *,
     host: str = "0.0.0.0",
     port: int = 8765,
+    streamable_http_path: str | None = None,
 ) -> FastMCP:
     _instr = (
         "Modular data-plane MCP over HTTP (Streamable HTTP or SSE). "
         "Only enabled backends register tools. "
-        "PostgreSQL: fixed diagnostic queries only (no arbitrary SQL). "
+        "PostgreSQL: fixed diagnostic queries; optional allowlisted_queries in config — "
+        "postgres_allowlisted_query(query_id) runs only ids from postgres_allowlisted_query_catalog (no raw SQL from clients). "
         "ssh_command_policy lists SSH command blocks from config and code."
     )
     if app.modules.opensearch.enabled and app.modules.opensearch.rag.enabled:
@@ -420,12 +434,15 @@ def build_mcp(
             "store durable facts only via opensearch_rag_store into allowlisted indices; "
             "retrieve context with opensearch_rag_search (not unbounded)."
         )
-    mcp = FastMCP(
-        "stack-mcp",
-        instructions=_instr,
-        host=host,
-        port=port,
-    )
+    _fm_kw: dict[str, Any] = {
+        "name": "stack-mcp",
+        "instructions": _instr,
+        "host": host,
+        "port": port,
+    }
+    if streamable_http_path is not None:
+        _fm_kw["streamable_http_path"] = streamable_http_path
+    mcp = FastMCP(**_fm_kw)
 
     @mcp.tool()
     def stack_mcp_status() -> str:
@@ -433,6 +450,11 @@ def build_mcp(
         return json.dumps(
             {
                 "postgres": app.modules.postgres.enabled,
+                "postgres_allowlisted_query_ids": (
+                    [q.id for q in app.modules.postgres.allowlisted_queries]
+                    if app.modules.postgres.enabled
+                    else []
+                ),
                 "redis": app.modules.redis.enabled,
                 "kafka": app.modules.kafka.enabled,
                 "prometheus": app.modules.prometheus.enabled,

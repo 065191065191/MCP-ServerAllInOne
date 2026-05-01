@@ -10,6 +10,7 @@ modules:
     statement_timeout_seconds: 25
     long_query_limit: 15
     top_n_tables: 20
+    allowlisted_queries: []
 
   redis:
     enabled: true

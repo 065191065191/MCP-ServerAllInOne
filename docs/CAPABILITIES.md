@@ -15,7 +15,7 @@
 
 ## PostgreSQL (`modules.postgres`)
 
-Только заранее прошитые **SELECT**-сценарии (никакого произвольного SQL).
+Встроенные **SELECT**-сценарии (фиксированный код в репозитории). Отдельно — **именованные запросы из конфига** (`allowlisted_queries`): произвольный текст SQL задаётся **только в YAML** администратором; MCP-клиенты и крон передают лишь **`query_id`**, не строку SQL.
 
 | Tool | Назначение |
 |------|------------|
@@ -29,6 +29,10 @@
 | `postgres_replication_lag` | `pg_stat_replication` или сообщение об отсутствии реплик. |
 | `postgres_autovacuum_health` | Мёртвые строки / метки autovacuum. |
 | `postgres_statements_top` | Топ по `pg_stat_statements` (если расширение есть). |
+| `postgres_allowlisted_query_catalog` | Только если `allowlisted_queries` не пуст: JSON со списком `id`, `description`, `max_rows` (**без** текста SQL). |
+| `postgres_allowlisted_query` | Только если allowlist не пуст: выполнить запрос по `query_id`; выдача ограничена `max_rows` на запись + флаг `truncated`. |
+
+Правила для записей `allowlisted_queries`: один оператор; только **SELECT** или **WITH …** (read-only); запрещены DML/DDL и ключевое слово **INTO**; размер текста SQL ограничен; `id` — `[a-zA-Z][-a-zA-Z0-9_]*`; дубликаты `id` недопустимы.
 
 Лимиты конфигурации: `statement_timeout_seconds`, `long_query_limit`, `top_n_tables`, список `schema_allowlist`, опционально `allowed_databases` для проверки имени БД из DSN.
 

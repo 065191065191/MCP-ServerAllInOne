@@ -1,4 +1,4 @@
-# Прод: UI/метрики (8888) + MCP по HTTP (8765, Streamable HTTP /mcp). Конфиг с хоста.
+# Прод: один порт — UI/метрики + MCP Streamable HTTP на http://<host>:8888/mcp (STACK_MCP_EMBED_MCP=true).
 # Использование:
 #   cp deploy/env.production.example deploy/.env
 #   # отредактировать .env и положить config.production.yaml рядом или указать путь в env
@@ -9,10 +9,13 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile
-    image: stack-mcp-ui:${STACK_MCP_IMAGE_TAG:-0.2.4}
+    image: stack-mcp-ui:${STACK_MCP_IMAGE_TAG:-0.2.5}
     restart: unless-stopped
     env_file:
       - .env
+    environment:
+      STACK_MCP_CONFIG: /etc/stack-mcp/config.yaml
+      STACK_MCP_EMBED_MCP: "true"
     ports:
       - "${STACK_MCP_UI_BIND:-127.0.0.1}:${STACK_MCP_UI_PORT:-8888}:8888"
     volumes:
@@ -27,28 +30,6 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
-
-  stack-mcp-mcp:
-    build:
-      context: ..
-      dockerfile: deploy/Dockerfile
-    image: stack-mcp-ui:${STACK_MCP_IMAGE_TAG:-0.2.4}
-    restart: unless-stopped
-    command: ["stack-mcp"]
-    env_file:
-      - .env
-    environment:
-      STACK_MCP_CONFIG: /etc/stack-mcp/config.yaml
-      STACK_MCP_HOST: "0.0.0.0"
-      STACK_MCP_PORT: "8765"
-      STACK_MCP_TRANSPORT: streamable-http
-    ports:
-      - "${STACK_MCP_MCP_BIND:-127.0.0.1}:${STACK_MCP_MCP_PORT:-8765}:8765"
-    volumes:
-      - type: bind
-        source: ${STACK_MCP_CONFIG_HOST_PATH:?set STACK_MCP_CONFIG_HOST_PATH to host path of yaml}
-        target: /etc/stack-mcp/config.yaml
-        read_only: true
 
 volumes:
   stack-mcp-logs:

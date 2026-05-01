@@ -2,38 +2,39 @@
 
 ## Готовый образ (архив)
 
-После локальной сборки в каталоге может лежать **`stack-mcp-ui-0.2.4.tar`** (`docker save`). Файл в `.gitignore` из‑за размера. Импорт на целевой машине:
+После локальной сборки в каталоге может лежать **`stack-mcp-ui-0.2.5.tar`** (`docker save`). Файл в `.gitignore` из‑за размера. Импорт на целевой машине:
 
 ```bash
-docker load -i stack-mcp-ui-0.2.4.tar
-# затем, например:
+docker load -i stack-mcp-ui-0.2.5.tar
+# Один порт: UI + MCP Streamable HTTP на http://127.0.0.1:8888/mcp
 docker run --rm -p 127.0.0.1:8888:8888 \
   -e STACK_MCP_CONFIG=/etc/stack-mcp/config.yaml \
+  -e STACK_MCP_EMBED_MCP=true \
   -v /path/on/host/config.yaml:/etc/stack-mcp/config.yaml:ro \
-  stack-mcp-ui:0.2.4
+  stack-mcp-ui:0.2.5
 
-# Отдельно MCP по HTTP (Streamable HTTP на /mcp):
+# Отдельный процесс только MCP (другой порт), без UI — при STACK_MCP_EMBED_MCP=false:
 docker run --rm -p 127.0.0.1:8765:8765 \
   -e STACK_MCP_CONFIG=/etc/stack-mcp/config.yaml \
   -e STACK_MCP_HOST=0.0.0.0 \
   -e STACK_MCP_PORT=8765 \
   -v /path/on/host/config.yaml:/etc/stack-mcp/config.yaml:ro \
-  stack-mcp-ui:0.2.4 stack-mcp
+  stack-mcp-ui:0.2.5 stack-mcp
 ```
 
 Пересобрать архив из корня репозитория:
 
 ```bash
-docker build -f deploy/Dockerfile -t stack-mcp-ui:0.2.4 .
-docker save stack-mcp-ui:0.2.4 -o deploy/stack-mcp-ui-0.2.4.tar
+docker build -f deploy/Dockerfile -t stack-mcp-ui:0.2.5 .
+docker save stack-mcp-ui:0.2.5 -o deploy/stack-mcp-ui-0.2.5.tar
 ```
 
 ## Состав
 
 | Артефакт | Назначение |
 |----------|------------|
-| `Dockerfile` | Образ с **`stack-mcp-ui`** (8888) и **`stack-mcp`** по HTTP (8765, `/mcp`). |
-| `docker-compose.prod.yml` | Пример: bind-mount конфига с хоста, том под audit-логи, порты только на localhost. |
+| `Dockerfile` | Образ: **`stack-mcp-ui`** на **8888**; при **`STACK_MCP_EMBED_MCP=true`** MCP на том же порту, путь **`/mcp`**. |
+| `docker-compose.prod.yml` | Один сервис, один проброшенный порт (UI + встроенный MCP). |
 | `env.production.example` | Шаблон переменных окружения → скопировать в `deploy/.env`. |
 | `config.production.example.yaml` | Шаблон YAML (секреты подставлять при деплое; `${VAR}` в файле не раскрывается). |
 | `systemd/stack-mcp-ui.service` | Unit для UI. |
@@ -52,7 +53,11 @@ docker save stack-mcp-ui:0.2.4 -o deploy/stack-mcp-ui-0.2.4.tar
 ## Безопасность (минимум)
 
 - Обязательные **`STACK_MCP_UI_TOKEN`** и секрет на **`/metrics`** в проде при доступе из сети (`STACK_MCP_METRICS_REQUIRE_TOKEN=true`).
+- **`STACK_MCP_EMBED_MCP=true`**: MCP доступен на **`/mcp`** на том же порту, что UI — защищайте **весь** фронт (и `/mcp`) через reverse proxy, **`STACK_MCP_UI_TRUSTED_HOSTS`**, и/или **`STACK_MCP_MTLS_*`** (TLS + обязательный клиентский сертификат на uvicorn).
+- При встроенном MCP держите **`STACK_MCP_UI_WORKERS=1`**, иначе сессии Streamable HTTP могут ломаться.
 - **`STACK_MCP_UI_ENABLE_INVOKE`** и **`STACK_MCP_UI_ENABLE_SEED`** оставьте `false`, если UI только для мониторинга.
+- Секреты только в env / смонтированных файлах; в репозитории — только примеры без реальных паролей.
+- **`modules.postgres.allowlisted_queries`**: SQL задаётся только в YAML администратором; клиенты передают лишь `query_id`.
 - SSH-модуль: отдельный пользователь на хостах, без широкого `sudo`; см. встроенный `builtin_safety_filter` и `docs/CAPABILITIES.md`.
 - Образ слушает `0.0.0.0` внутри контейнера; снаружи пробрасывайте **`127.0.0.1`** или сегмент доверенной сети.
 
