@@ -1,3 +1,6 @@
+# Локальные правила и данные Cursor IDE — не в репозитории
+.cursor/
+
 .venv/
 venv/
 __pycache__/
