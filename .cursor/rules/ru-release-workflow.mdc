@@ -20,4 +20,4 @@ alwaysApply: true
    Для чисто служебных правок допускается коммит без тега (по смыслу изменения).
 6. **Сервер (GitHub)** — после коммита (и тега, если есть) выполнить `git push origin master` (или актуальное имя ветки), чтобы локальное состояние совпадало с [MCP-ServerAllInOne](https://github.com/065191065191/MCP-ServerAllInOne).
 
-**Автор проекта:** Gos Sepat Ulievich (указан в `pyproject.toml`, раздел `authors`).
+**Автор проекта:** Gos Stepan Ulievich (указан в `pyproject.toml`, раздел `authors`).

@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "stack-mcp-server"
-version = "0.2.2"
+version = "0.2.3"
 description = "MCP по HTTP: модули данных и опциональный браузерный MCP (mcp-playwright)"
 readme = "README.md"
-authors = [{ name = "Gos Sepat Ulievich" }]
+authors = [{ name = "Gos Stepan Ulievich" }]
 requires-python = ">=3.11"
 dependencies = [
   "mcp>=1.2.0",

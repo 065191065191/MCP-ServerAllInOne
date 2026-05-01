@@ -1,5 +1,5 @@
 ﻿# См. deploy/Dockerfile — канонический прод-образ (UI + бинарники MCP).
-# Сборка из корня: docker build -f deploy/Dockerfile -t stack-mcp:0.2.2 .
+# Сборка из корня: docker build -f deploy/Dockerfile -t stack-mcp:0.2.3 .
 
 FROM python:3.12-slim-bookworm
 
