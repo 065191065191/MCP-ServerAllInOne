@@ -1,0 +1,22 @@
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+# Архивы релиза (тяжёлые); сам каталог release/ и README в репозитории есть
+release/*.tar.gz
+.bundles/
+.pytest_cache/
+.ruff_cache/
+logs/*.log
+.env
+deploy/.env
+# Собранный образ (docker save) — большой бинарник, не коммитить
+deploy/stack-mcp-ui-*.tar
+deploy/stack-mcp-ui-*.tar.gz
+config.yaml
+# Vendored Chromium для Playwright (см. playwright-browsers/README.md)
+playwright-browsers/*
+!playwright-browsers/README.md

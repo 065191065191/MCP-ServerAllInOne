@@ -1,0 +1,17 @@
+# Браузерный MCP (ma-pony/mcp-playwright) — отдельный сервис от stack-mcp.
+# Запуск: docker compose -f docker-compose.playwright.yml up -d --build
+# Эндпоинт MCP: http://127.0.0.1:8770/mcp (Streamable HTTP)
+
+services:
+  mcp-playwright:
+    build:
+      context: .
+      dockerfile: docker/mcp-playwright/Dockerfile
+    image: stack-mcp-playwright:local
+    restart: unless-stopped
+    environment:
+      MCP_PLAYWRIGHT_HOST: "0.0.0.0"
+      MCP_PLAYWRIGHT_PORT: "8770"
+    ports:
+      - "127.0.0.1:8770:8770"
+    shm_size: "1gb"

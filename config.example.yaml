@@ -1,0 +1,178 @@
+# Copy to config.yaml or set STACK_MCP_CONFIG=/path/to/config.yaml
+#
+# MCP процесс (stack-mcp): HTTP по умолчанию — STACK_MCP_TRANSPORT=streamable-http,
+# STACK_MCP_HOST=0.0.0.0, STACK_MCP_PORT=8765, путь /mcp. Localhost без STACK_MCP_DEV_LOCAL=true запрещён.
+#
+# mTLS (HTTPS + обязательный клиентский сертификат): только если заданы все три файла —
+#   STACK_MCP_MTLS_CERT_FILE, STACK_MCP_MTLS_KEY_FILE, STACK_MCP_MTLS_ROOT_CA_FILE
+# (серверный CRT, KEY, CA для проверки клиента). Иначе слушаем plain HTTP.
+# Опционально: STACK_MCP_MTLS_KEY_PASSWORD — пароль от ключа.
+#
+# Клиентский mTLS к Kafka / OpenSearch / Postgres / Redis / Prometheus: в каждом модуле
+# либо все три файла, либо ни одного — mtls_cert_file, mtls_key_file, mtls_root_ca_file
+# (+ опционально mtls_key_password). Иначе — прежнее поведение (plain или как в dsn/url).
+# Redis: при mtls_* в url обязателен протокол rediss://. Kafka: при PLAINTEXT и mtls_* протокол
+# переключается на SSL; при SASL_SSL сертификаты клиента добавляются к SASL.
+
+modules:
+  opensearch:
+    enabled: false
+    hosts:
+      - https://localhost:9200
+    use_ssl: true
+    verify_certs: true
+    username: null
+    password: null
+    # Если задано — пароль из переменной окружения (имя переменной, не значение).
+    password_env: null
+    request_timeout_seconds: 30
+    search_max_size: 50
+    allow_write: false
+    mtls_cert_file: null
+    mtls_key_file: null
+    mtls_root_ca_file: null
+    mtls_key_password: null
+    # RAG-память агента в OpenSearch: только перечисленные индексы, лимиты на размер и объём.
+    rag:
+      enabled: false
+      index_allowlist: []
+      # Пример: [ "agent-memory" ]
+      max_text_bytes: 100000
+      max_title_bytes: 2048
+      max_metadata_json_bytes: 8192
+      max_metadata_keys: 32
+      max_docs_per_index: 50000
+      retrieval_size_cap: 15
+      allow_delete_by_id: false
+      auto_create_index: false
+      source_tag: stack-mcp-rag
+
+  kafka:
+    enabled: false
+    bootstrap_servers:
+      - localhost:9092
+    security_protocol: PLAINTEXT
+    sasl_mechanism: null
+    sasl_username: null
+    sasl_password: null
+    topic_allowlist: []
+    allow_produce: false
+    allow_admin: false
+    consume_max_messages: 200
+    consume_max_bytes: 4194304
+    consume_timeout_seconds: 10
+    produce_max_messages: 50
+    produce_max_message_bytes: 262144
+    list_topics_max: 500
+    mtls_cert_file: null
+    mtls_key_file: null
+    mtls_root_ca_file: null
+    mtls_key_password: null
+
+  postgres:
+    enabled: false
+    dsn: postgresql://user:pass@localhost:5432/dbname
+    allowed_databases: []
+    schema_allowlist:
+      - public
+    statement_timeout_seconds: 25
+    long_query_limit: 20
+    top_n_tables: 20
+    mtls_cert_file: null
+    mtls_key_file: null
+    mtls_root_ca_file: null
+    mtls_key_password: null
+
+  redis:
+    enabled: false
+    url: redis://localhost:6379/0
+    socket_timeout_seconds: 10
+    get_max_value_bytes: 262144
+    mget_max_keys: 10
+    hgetall_max_fields: 100
+    hgetall_max_total_bytes: 262144
+    slowlog_max_entries: 32
+    scan_enabled: false
+    scan_prefix_allowlist: []
+    scan_max_iterations: 10
+    scan_count: 100
+    mtls_cert_file: null
+    mtls_key_file: null
+    mtls_root_ca_file: null
+    mtls_key_password: null
+
+  # HTTP API Prometheus (Pod: http://prometheus:9090 или port-forward).
+  prometheus:
+    enabled: false
+    base_url: http://localhost:9090
+    bearer_token: null
+    bearer_token_path: null
+    basic_auth_username: null
+    basic_auth_password: null
+    verify_tls: true
+    timeout_seconds: 30
+    max_query_range_seconds: 604800
+    max_step_points: 11000
+    min_step_seconds: 1.0
+    max_vector_samples: 500
+    max_matrix_series: 100
+    max_points_per_series: 5000
+    max_series_matches: 500
+    # Дефолтный топик для prometheus_export_instant_to_kafka (должен быть в kafka.topic_allowlist).
+    kafka_metrics_topic: null
+    mtls_cert_file: null
+    mtls_key_file: null
+    mtls_root_ca_file: null
+    mtls_key_password: null
+
+  # SSH: агент видит хосты через ssh_hosts_overview; опасные шаблоны — в forbidden_*.
+  # Список блокировок для ssh_run_command: MCP tool ssh_command_policy (всегда доступен).
+  ssh:
+    enabled: false
+    strict_host_key_checking: false
+    connect_timeout_seconds: 30
+    command_timeout_seconds: 120
+    max_output_bytes: 262144
+    allow_shell_operators: false
+    # Встроенные regex: sudo/reboot/dd/curl/wget/perl|python|ruby -c|-e, eval, chmod 777, > /dev/sd*…
+    builtin_safety_filter: true
+    forbidden_substrings:
+      - "rm -rf /"
+      - "mkfs"
+      - "dd if=/dev/zero"
+      - ":(){ :|:& };:"
+    forbidden_regex: []
+    hosts: []
+    # Пример записи хоста:
+    # - id: web-prod-1
+    #   hostname: 203.0.113.10
+    #   port: 22
+    #   username: deploy
+    #   description: "Веб-нода прод"
+    #   private_key_path: ~/.ssh/id_ed25519
+    #   private_key_passphrase_env: null
+    #   # или пароль из окружения:
+    #   # password_env: SSH_WEB_PROD1_PASSWORD
+
+  # Почта: пароли только из env (imap_password_env обязателен при enabled: true).
+  # Пример: export STACK_MCP_MAIL_IMAP_PASSWORD='...'
+  mail:
+    enabled: false
+    imap_host: localhost
+    imap_port: 993
+    imap_ssl: true
+    imap_username: ""
+    imap_username_env: null
+    imap_password_env: STACK_MCP_MAIL_IMAP_PASSWORD
+    default_mailbox: INBOX
+    default_from_env: null
+    list_mailboxes_max: 200
+    search_max_messages: 50
+    fetch_max_bytes: 262144
+    smtp_host: localhost
+    smtp_port: 587
+    smtp_ssl: false
+    smtp_starttls: true
+    smtp_timeout_seconds: 30
+    smtp_username_env: null
+    smtp_password_env: null

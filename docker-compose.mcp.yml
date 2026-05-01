@@ -1,0 +1,21 @@
+﻿# Актуальный прод-стек: deploy/docker-compose.prod.yml (UI + MCP HTTP).
+# Этот файл — краткий пример одного сервиса MCP; образ тот же, что и в deploy/Dockerfile.
+
+services:
+  stack-mcp-mcp:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+    image: stack-mcp:0.3.0
+    restart: unless-stopped
+    command: ["stack-mcp"]
+    environment:
+      STACK_MCP_CONFIG: /etc/stack-mcp/config.yaml
+      STACK_MCP_HOST: "0.0.0.0"
+      STACK_MCP_PORT: "8765"
+      STACK_MCP_TRANSPORT: streamable-http
+      STACK_MCP_SSH_HOSTS_FILE: ${STACK_MCP_SSH_HOSTS_FILE:-}
+    ports:
+      - "127.0.0.1:8765:8765"
+    volumes:
+      - ${STACK_MCP_CONFIG_HOST_PATH:?set STACK_MCP_CONFIG_HOST_PATH}:/etc/stack-mcp/config.yaml:ro

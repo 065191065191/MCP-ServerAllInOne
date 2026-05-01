@@ -1,0 +1,93 @@
+﻿# Production template for MCP container.
+# Mount into container as /app/config/config.yaml and set STACK_MCP_CONFIG accordingly.
+
+modules:
+  opensearch:
+    enabled: false
+    hosts:
+      - https://opensearch.example.internal:9200
+    use_ssl: true
+    verify_certs: true
+    username: null
+    password: null
+    request_timeout_seconds: 30
+    search_max_size: 50
+    allow_write: false
+
+  kafka:
+    enabled: false
+    bootstrap_servers:
+      - kafka.example.internal:9092
+    security_protocol: PLAINTEXT
+    sasl_mechanism: null
+    sasl_username: null
+    sasl_password: null
+    topic_allowlist: []
+    allow_produce: false
+    allow_admin: false
+    consume_max_messages: 200
+    consume_max_bytes: 4194304
+    consume_timeout_seconds: 10
+    produce_max_messages: 50
+    produce_max_message_bytes: 262144
+    list_topics_max: 500
+
+  postgres:
+    enabled: false
+    dsn: postgresql://user:pass@postgres.example.internal:5432/dbname
+    allowed_databases: []
+    schema_allowlist:
+      - public
+    statement_timeout_seconds: 25
+    long_query_limit: 20
+    top_n_tables: 20
+
+  redis:
+    enabled: false
+    url: redis://redis.example.internal:6379/0
+    socket_timeout_seconds: 10
+    get_max_value_bytes: 262144
+    mget_max_keys: 10
+    hgetall_max_fields: 100
+    hgetall_max_total_bytes: 262144
+    slowlog_max_entries: 32
+    scan_enabled: false
+    scan_prefix_allowlist: []
+    scan_max_iterations: 10
+    scan_count: 100
+
+  s3:
+    # Hard disabled by policy (no API access).
+    enabled: false
+    endpoint_url: null
+    region_name: us-east-1
+    aws_access_key_id: null
+    aws_secret_access_key: null
+    bucket_allowlist: []
+    require_prefix: true
+    list_max_keys_per_request: 500
+    list_max_keys_total: 2000
+    list_max_continuation_rounds: 4
+    get_max_inline_bytes: 131072
+    presign_ttl_seconds: 900
+    allow_put: false
+    allow_delete: false
+
+  prometheus:
+    enabled: false
+    base_url: http://prometheus.example.internal:9090
+    verify_tls: true
+    bearer_token: null
+    bearer_token_path: null
+    kafka_metrics_topic: null
+
+  ssh:
+    enabled: false
+    default_private_key_path: ~/.ssh/id_ed25519
+    strict_host_key_checking: true
+    builtin_safety_filter: true
+    allow_shell_operators: false
+    forbidden_substrings: []
+    forbidden_regex: []
+    hosts: []
+    # Сотни хостов: смонтируйте второй YAML и STACK_MCP_SSH_HOSTS_FILE (см. docs/SSH_SCALE.md).

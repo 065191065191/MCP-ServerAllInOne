@@ -1,0 +1,133 @@
+modules:
+  # OpenClaw memory layer (shared RAG in OpenSearch).
+  opensearch:
+    enabled: true
+    hosts:
+      - http://localhost:9200
+    use_ssl: false
+    verify_certs: false
+    username: null
+    password: null
+    password_env: null
+    request_timeout_seconds: 30
+    search_max_size: 30
+    allow_write: false
+    rag:
+      enabled: true
+      index_allowlist:
+        - openclaw-memory
+      max_text_bytes: 100000
+      max_title_bytes: 2048
+      max_metadata_json_bytes: 8192
+      max_metadata_keys: 32
+      max_docs_per_index: 50000
+      retrieval_size_cap: 12
+      allow_delete_by_id: false
+      auto_create_index: true
+      source_tag: openclaw-rag
+
+  # Event bus for asynchronous workflows.
+  kafka:
+    enabled: true
+    bootstrap_servers:
+      - localhost:9094
+    security_protocol: PLAINTEXT
+    sasl_mechanism: null
+    sasl_username: null
+    sasl_password: null
+    topic_allowlist:
+      - openclaw.events
+      - openclaw.metrics
+      - prometheus.metrics
+    allow_produce: true
+    allow_admin: false
+    consume_max_messages: 100
+    consume_max_bytes: 2097152
+    consume_timeout_seconds: 10
+    produce_max_messages: 30
+    produce_max_message_bytes: 131072
+    list_topics_max: 200
+
+  # Diagnostics and state snapshots.
+  postgres:
+    enabled: true
+    dsn: postgresql://stack:stack@localhost:5432/stack
+    allowed_databases:
+      - stack
+    schema_allowlist:
+      - public
+    statement_timeout_seconds: 25
+    long_query_limit: 20
+    top_n_tables: 20
+
+  redis:
+    enabled: true
+    url: redis://localhost:6379/0
+    socket_timeout_seconds: 10
+    get_max_value_bytes: 131072
+    mget_max_keys: 10
+    hgetall_max_fields: 100
+    hgetall_max_total_bytes: 131072
+    slowlog_max_entries: 32
+    scan_enabled: false
+    scan_prefix_allowlist: []
+    scan_max_iterations: 10
+    scan_count: 100
+
+  # Optional observability. Enable only when Prometheus endpoint is available.
+  prometheus:
+    enabled: false
+    base_url: http://localhost:9090
+    bearer_token: null
+    bearer_token_path: null
+    basic_auth_username: null
+    basic_auth_password: null
+    verify_tls: true
+    timeout_seconds: 30
+    max_query_range_seconds: 604800
+    max_step_points: 11000
+    min_step_seconds: 1.0
+    max_vector_samples: 500
+    max_matrix_series: 100
+    max_points_per_series: 5000
+    max_series_matches: 500
+    kafka_metrics_topic: prometheus.metrics
+
+  # Optional channels for notification / action.
+  mail:
+    enabled: false
+    imap_host: localhost
+    imap_port: 993
+    imap_ssl: true
+    imap_username: ""
+    imap_username_env: null
+    imap_password_env: STACK_MCP_MAIL_IMAP_PASSWORD
+    default_mailbox: INBOX
+    default_from_env: null
+    list_mailboxes_max: 200
+    search_max_messages: 50
+    fetch_max_bytes: 262144
+    smtp_host: localhost
+    smtp_port: 587
+    smtp_ssl: false
+    smtp_starttls: true
+    smtp_timeout_seconds: 30
+    smtp_username_env: null
+    smtp_password_env: null
+
+  # Optional remote actions. Keep disabled until host allowlist is curated.
+  ssh:
+    enabled: false
+    strict_host_key_checking: false
+    connect_timeout_seconds: 30
+    command_timeout_seconds: 120
+    max_output_bytes: 262144
+    allow_shell_operators: false
+    builtin_safety_filter: true
+    forbidden_substrings:
+      - "rm -rf /"
+      - "mkfs"
+      - "dd if=/dev/zero"
+      - ":(){ :|:& };:"
+    forbidden_regex: []
+    hosts: []

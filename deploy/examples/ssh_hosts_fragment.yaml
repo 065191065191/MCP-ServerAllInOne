@@ -1,0 +1,14 @@
+# Пример фрагмента для STACK_MCP_SSH_HOSTS_FILE (или вставка в основной config).
+# Можно сгенерировать: python scripts/generate_ssh_hosts_yaml.py deploy/examples/ssh_inventory.csv -o /etc/stack-mcp/ssh_hosts.yaml
+
+- id: web-01
+  hostname: 203.0.113.10
+  port: 22
+  username: deploy
+  description: app node 1
+- id: legacy-02
+  hostname: 203.0.113.11
+  port: 22
+  username: admin
+  password_env: SSH_LEGACY_02_PASSWORD
+  description: password-only host

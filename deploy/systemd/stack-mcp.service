@@ -1,0 +1,23 @@
+[Unit]
+Description=stack-mcp MCP server (Streamable HTTP / SSE)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=stackmcp
+Group=stackmcp
+WorkingDirectory=/opt/stack-mcp
+EnvironmentFile=-/etc/stack-mcp/mcp.env
+Environment=STACK_MCP_CONFIG=/etc/stack-mcp/config.yaml
+Environment=STACK_MCP_HOST=0.0.0.0
+Environment=STACK_MCP_PORT=8765
+Environment=STACK_MCP_TRANSPORT=streamable-http
+ExecStart=/opt/stack-mcp/.venv/bin/stack-mcp
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

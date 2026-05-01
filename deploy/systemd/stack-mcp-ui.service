@@ -1,0 +1,24 @@
+[Unit]
+Description=stack-mcp UI and Prometheus metrics (/health, /metrics)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=stackmcp
+Group=stackmcp
+WorkingDirectory=/opt/stack-mcp
+EnvironmentFile=-/etc/stack-mcp/ui.env
+Environment=STACK_MCP_CONFIG=/etc/stack-mcp/config.yaml
+ExecStart=/opt/stack-mcp/.venv/bin/stack-mcp-ui
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/log/stack-mcp
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target

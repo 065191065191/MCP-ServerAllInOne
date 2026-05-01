@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>stack-mcp-server — доклад для руководства</title>
+  <style>
+    :root {
+      --bg0: #06070b;
+      --bg1: #0c0e14;
+      --surface: #12151e;
+      --surface2: #1a1f2c;
+      --border: rgba(255, 255, 255, 0.085);
+      --border-bright: rgba(255, 255, 255, 0.14);
+      --text: #f8f9fb;
+      --muted: #a8b0c2;
+      --dim: #7a8496;
+      --accent: #f4c14a;
+      --accent-dim: #c9a035;
+      --accent2: #4eeadb;
+      --accent2-dim: #2ec4b6;
+      --danger: #fb9090;
+      --ok: #5ee9a5;
+      --r: 22px;
+      --r-sm: 14px;
+      --font: ui-sans-serif, "Segoe UI", system-ui, -apple-system, sans-serif;
+      --mono: ui-monospace, "Cascadia Code", "Consolas", monospace;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      font-family: var(--font);
+      background: var(--bg0);
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+    }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(1000px 560px at 10% -12%, rgba(244, 193, 74, 0.09), transparent 58%),
+        radial-gradient(780px 480px at 94% 6%, rgba(78, 234, 219, 0.07), transparent 52%),
+        radial-gradient(600px 400px at 50% 100%, rgba(99, 102, 241, 0.04), transparent 45%),
+        linear-gradient(165deg, var(--bg0) 0%, var(--bg1) 42%, #080a10 100%);
+      pointer-events: none;
+      z-index: 0;
+    }
+    .progress {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: rgba(255, 255, 255, 0.05);
+      z-index: 20;
+    }
+    .progress i {
+      display: block;
+      height: 100%;
+      width: 16.67%;
+      background: linear-gradient(90deg, var(--accent-dim), var(--accent), var(--accent2));
+      box-shadow: 0 0 20px rgba(244, 193, 74, 0.45);
+      transition: width 0.4s cubic-bezier(0.33, 1, 0.68, 1);
+    }
+    .deck {
+      position: relative;
+      z-index: 1;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: clamp(14px, 2.5vh, 36px) clamp(12px, 3.5vw, 40px);
+    }
+    .slide {
+      display: none;
+      width: 100%;
+      max-width: 960px;
+      min-height: min(90vh, 680px);
+      background: linear-gradient(155deg, var(--surface2) 0%, var(--surface) 48%, #0f1218 100%);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: clamp(22px, 3.5vh, 40px) clamp(22px, 4.2vw, 48px);
+      flex-direction: column;
+      position: relative;
+      box-shadow:
+        0 0 0 1px rgba(255, 255, 255, 0.04) inset,
+        0 28px 72px rgba(0, 0, 0, 0.55),
+        0 4px 24px rgba(0, 0, 0, 0.35);
+      animation: in 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    .slide.active { display: flex; }
+    @keyframes in {
+      from { opacity: 0; transform: translateY(12px) scale(0.992); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .slide-meta {
+      position: absolute;
+      top: clamp(14px, 2vh, 24px);
+      left: clamp(20px, 4vw, 44px);
+      right: clamp(20px, 4vw, 44px);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.58rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--dim);
+    }
+    .slide-meta span:first-child {
+      font-weight: 600;
+      color: rgba(168, 176, 194, 0.95);
+      letter-spacing: 0.24em;
+    }
+    .slide-meta b {
+      color: var(--accent);
+      font-weight: 700;
+      text-shadow: 0 0 28px rgba(244, 193, 74, 0.35);
+    }
+    .slide-body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding-top: 1.75rem;
+      min-height: 0;
+    }
+    .slide-top {
+      flex-shrink: 0;
+    }
+    h1 {
+      font-size: clamp(1.28rem, 2.95vw, 1.88rem);
+      font-weight: 680;
+      letter-spacing: -0.038em;
+      line-height: 1.14;
+      max-width: 30ch;
+      color: var(--text);
+      text-shadow: 0 2px 32px rgba(0, 0, 0, 0.35);
+    }
+    .tagline {
+      margin-top: 0.55rem;
+      font-size: clamp(0.8rem, 1.4vw, 0.92rem);
+      color: var(--muted);
+      max-width: 38ch;
+      line-height: 1.5;
+      font-weight: 450;
+      letter-spacing: 0.01em;
+    }
+    .tagline::before {
+      content: "";
+      display: block;
+      width: 36px;
+      height: 2px;
+      border-radius: 2px;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      opacity: 0.85;
+      margin-bottom: 0.65rem;
+    }
+    .figure-wrap {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 200px;
+      margin: 0.75rem 0 0.5rem;
+      padding: clamp(12px, 2vh, 22px) clamp(10px, 2vw, 20px);
+      background: rgba(0, 0, 0, 0.22);
+      border-radius: var(--r-sm);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
+    }
+    .figure-wrap svg {
+      width: 100%;
+      max-width: 720px;
+      height: auto;
+      display: block;
+      filter: drop-shadow(0 8px 24px rgba(0, 0, 0, 0.35));
+    }
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
+      margin-top: 0.35rem;
+    }
+    .chip {
+      font-size: 0.64rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--dim);
+      padding: 0.38rem 0.72rem;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: linear-gradient(165deg, rgba(255, 255, 255, 0.06) 0%, rgba(0, 0, 0, 0.15) 100%);
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset;
+    }
+    .chip.bad {
+      color: #fecaca;
+      border-color: rgba(251, 144, 144, 0.4);
+      background: linear-gradient(165deg, rgba(251, 113, 133, 0.12) 0%, rgba(0, 0, 0, 0.2) 100%);
+    }
+    .chip.good {
+      color: #bbf7d0;
+      border-color: rgba(94, 233, 165, 0.35);
+      background: linear-gradient(165deg, rgba(94, 233, 165, 0.1) 0%, rgba(0, 0, 0, 0.18) 100%);
+    }
+    .mod-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin-top: 0.75rem;
+      flex: 1;
+      align-content: center;
+    }
+    @media (max-width: 720px) {
+      .mod-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    .mod {
+      aspect-ratio: 1;
+      max-height: 120px;
+      border-radius: var(--r-sm);
+      border: 1px solid var(--border);
+      background: linear-gradient(160deg, rgba(255, 255, 255, 0.05) 0%, rgba(0, 0, 0, 0.28) 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      padding: 10px 8px;
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
+      transition: border-color 0.25s ease, box-shadow 0.25s ease;
+    }
+    .mod:hover {
+      border-color: rgba(244, 193, 74, 0.25);
+      box-shadow: 0 0 0 1px rgba(78, 234, 219, 0.08), 0 12px 28px rgba(0, 0, 0, 0.35);
+    }
+    .mod svg { width: 38px; height: 38px; opacity: 0.98; filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.4)); }
+    .mod span {
+      font-size: 0.68rem;
+      font-weight: 600;
+      color: var(--text);
+      text-align: center;
+      line-height: 1.15;
+    }
+    .mod.muted span { font-size: 0.62rem; color: var(--muted); }
+    .kpi-visual {
+      width: 100%;
+      max-width: 540px;
+      margin: 0.95rem auto 0;
+      padding: 1.05rem 1.15rem;
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: var(--r-sm);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+    }
+    .kpi-row {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+    .kpi-item { }
+    .kpi-item label {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      font-size: 0.72rem;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    .kpi-item label strong { color: var(--text); font-weight: 600; font-size: 0.75rem; }
+    .kpi-item .bar {
+      height: 12px;
+      border-radius: 999px;
+      background: rgba(0, 0, 0, 0.35);
+      overflow: hidden;
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset;
+    }
+    .kpi-item .bar i {
+      display: block;
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--accent-dim), var(--accent) 40%, var(--accent2));
+      box-shadow: 0 0 16px rgba(244, 193, 74, 0.25);
+      position: relative;
+    }
+    .kpi-item .bar i::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, transparent 52%);
+      border-radius: inherit;
+      pointer-events: none;
+    }
+    .kpi-item .val {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--accent);
+      text-shadow: 0 0 20px rgba(244, 193, 74, 0.35);
+    }
+    .cta .cta-sub {
+      display: block;
+      font-size: 0.7rem;
+      opacity: 0.92;
+      margin-top: 0.05rem;
+    }
+    .cta-row {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 14px;
+      margin-top: 0.9rem;
+    }
+    .cta {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 0.62rem 0.95rem;
+      border-radius: var(--r-sm);
+      border: 1px solid var(--border);
+      background: linear-gradient(145deg, rgba(255, 255, 255, 0.05) 0%, rgba(0, 0, 0, 0.2) 100%);
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
+    }
+    .cta svg { width: 34px; height: 34px; flex-shrink: 0; opacity: 0.95; }
+    .cta .cta-text { font-size: 0.74rem; color: var(--muted); line-height: 1.35; }
+    .cta .cta-text b {
+      display: block;
+      color: var(--text);
+      font-size: 0.82rem;
+      font-weight: 650;
+      letter-spacing: -0.02em;
+      margin-bottom: 0.15rem;
+    }
+    code {
+      font-family: var(--mono);
+      font-size: 0.86em;
+      color: var(--accent2);
+      padding: 0.12em 0.38em;
+      border-radius: 6px;
+      background: rgba(78, 234, 219, 0.1);
+      border: 1px solid rgba(78, 234, 219, 0.2);
+    }
+    .nav-hint {
+      position: fixed;
+      bottom: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.64rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: rgba(122, 132, 150, 0.85);
+      z-index: 15;
+    }
+    @media print {
+      body::before, .progress, .nav-hint { display: none !important; }
+      .slide {
+        display: flex !important;
+        page-break-after: always;
+        min-height: 100vh;
+        box-shadow: none;
+        animation: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Говорите детали вслух: цифры, сроки, владелец — на экране только опоры для глаз -->
+
+  <div class="progress"><i id="bar"></i></div>
+  <div class="deck" id="deck">
+
+    <section class="slide active" aria-label="Тезис">
+      <div class="slide-meta"><span>stack-mcp-server</span><span><b>01</b> / 06</span></div>
+      <div class="slide-body">
+        <div class="slide-top">
+          <h1>Один шлюз между ИИ и вашей инфраструктурой</h1>
+          <p class="tagline">Меньше точек доступа, больше контроля и прозрачности для аудита</p>
+        </div>
+        <div class="figure-wrap" aria-hidden="true">
+          <svg viewBox="0 0 640 220" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="gMcp" x1="210" y1="70" x2="390" y2="150" gradientUnits="userSpaceOnUse">
+                <stop stop-color="rgba(244,193,74,0.25)"/><stop offset="1" stop-color="rgba(78,234,219,0.12)"/>
+              </linearGradient>
+              <linearGradient id="gLine" x1="0" y1="0" x2="1" y2="0" gradientUnits="objectBoundingBox">
+                <stop stop-color="#4eeadb"/><stop offset="1" stop-color="#f4c14a"/>
+              </linearGradient>
+            </defs>
+            <text x="48" y="38" fill="#7a8496" font-size="11" font-family="system-ui,sans-serif" letter-spacing="2.5">АГЕНТЫ</text>
+            <circle cx="90" cy="95" r="28" stroke="url(#gLine)" stroke-width="2" fill="rgba(244,193,74,0.06)" stroke-linecap="round"/>
+            <circle cx="90" cy="155" r="22" stroke="#4eeadb" stroke-width="1.5" fill="rgba(78,234,219,0.05)"/>
+            <path d="M130 95 L210 110" stroke="#5c6578" stroke-width="2" stroke-dasharray="5 5" stroke-linecap="round"/>
+            <path d="M130 155 L210 110" stroke="#5c6578" stroke-width="2" stroke-dasharray="5 5" stroke-linecap="round"/>
+            <rect x="210" y="70" width="180" height="80" rx="14" stroke="#f4c14a" stroke-width="2" fill="url(#gMcp)"/>
+            <text x="300" y="108" text-anchor="middle" fill="#f8f9fb" font-size="15" font-weight="600" font-family="system-ui,sans-serif">MCP</text>
+            <text x="300" y="128" text-anchor="middle" fill="#a8b0c2" font-size="10" font-family="system-ui,sans-serif">HTTP · политики</text>
+            <path d="M390 110 L450 75" stroke="#4eeadb" stroke-width="2" stroke-linecap="round"/>
+            <path d="M390 110 L450 110" stroke="#4eeadb" stroke-width="2" stroke-linecap="round"/>
+            <path d="M390 110 L450 145" stroke="#4eeadb" stroke-width="2" stroke-linecap="round"/>
+            <path d="M390 110 L450 180" stroke="#4eeadb" stroke-width="2" stroke-linecap="round"/>
+            <rect x="450" y="58" width="88" height="34" rx="8" stroke="#7a8496" fill="rgba(0,0,0,0.28)"/>
+            <text x="494" y="79" text-anchor="middle" fill="#a8b0c2" font-size="9" font-family="system-ui,sans-serif">БД</text>
+            <rect x="450" y="98" width="88" height="34" rx="8" stroke="#7a8496" fill="rgba(0,0,0,0.28)"/>
+            <text x="494" y="119" text-anchor="middle" fill="#a8b0c2" font-size="9" font-family="system-ui,sans-serif">Очереди</text>
+            <rect x="450" y="138" width="88" height="34" rx="8" stroke="#7a8496" fill="rgba(0,0,0,0.28)"/>
+            <text x="494" y="159" text-anchor="middle" fill="#a8b0c2" font-size="9" font-family="system-ui,sans-serif">Поиск</text>
+            <rect x="450" y="178" width="88" height="34" rx="8" stroke="#7a8496" fill="rgba(0,0,0,0.28)"/>
+            <text x="494" y="199" text-anchor="middle" fill="#a8b0c2" font-size="9" font-family="system-ui,sans-serif">Хосты</text>
+            <text x="560" y="38" fill="#7a8496" font-size="11" font-family="system-ui,sans-serif" letter-spacing="2.5">СТЕК</text>
+          </svg>
+        </div>
+        <div class="chips">
+          <span class="chip">MCP / HTTP</span>
+          <span class="chip">TCO</span>
+          <span class="chip">Риск</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" aria-label="Риск">
+      <div class="slide-meta"><span>stack-mcp-server</span><span><b>02</b> / 06</span></div>
+      <div class="slide-body">
+        <div class="slide-top">
+          <h1>Хаос доступов стоит денег и оставляет слепые зоны</h1>
+          <p class="tagline">Без единого контура риск растёт нелинейно</p>
+        </div>
+        <div class="figure-wrap" aria-hidden="true">
+          <svg viewBox="0 0 640 240" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <text x="280" y="28" fill="#f87171" font-size="12" font-weight="600" font-family="system-ui,sans-serif" letter-spacing="3">РИСК</text>
+            <circle cx="320" cy="120" r="22" fill="rgba(248,113,113,0.15)" stroke="#f87171" stroke-width="2"/>
+            <text x="320" y="125" text-anchor="middle" fill="#f4f5f7" font-size="11" font-family="system-ui,sans-serif">ИИ</text>
+            <g stroke="#f87171" stroke-width="1.2" opacity="0.85">
+              <path d="M320 98 L180 45"/><path d="M320 98 L460 45"/><path d="M320 142 L140 120"/><path d="M320 142 L500 120"/>
+              <path d="M302 120 L200 200"/><path d="M338 120 L440 200"/><path d="M320 98 L320 30"/>
+            </g>
+            <circle cx="180" cy="45" r="14" fill="#1f2937" stroke="#6b7280"/>
+            <circle cx="460" cy="45" r="14" fill="#1f2937" stroke="#6b7280"/>
+            <circle cx="140" cy="120" r="14" fill="#1f2937" stroke="#6b7280"/>
+            <circle cx="500" cy="120" r="14" fill="#1f2937" stroke="#6b7280"/>
+            <circle cx="200" cy="200" r="14" fill="#1f2937" stroke="#6b7280"/>
+            <circle cx="440" cy="200" r="14" fill="#1f2937" stroke="#6b7280"/>
+            <circle cx="320" cy="30" r="12" fill="#1f2937" stroke="#6b7280"/>
+            <text x="320" y="228" text-anchor="middle" fill="#6b7289" font-size="10" font-family="system-ui,sans-serif">Много неконтролируемых связей</text>
+          </svg>
+        </div>
+        <div class="chips">
+          <span class="chip bad">MTTR ↑</span>
+          <span class="chip bad">Аудит</span>
+          <span class="chip bad">Простой</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" aria-label="Ответ">
+      <div class="slide-meta"><span>stack-mcp-server</span><span><b>03</b> / 06</span></div>
+      <div class="slide-body">
+        <div class="slide-top">
+          <h1>Включили в конфиг — инструменты появились в каталоге</h1>
+          <p class="tagline">Эндпоинт <code>/mcp</code> и только явно разрешённые действия</p>
+        </div>
+        <div class="figure-wrap" aria-hidden="true">
+          <svg viewBox="0 0 640 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="40" y="70" width="100" height="56" rx="8" stroke="#3dd6c6" stroke-width="2" fill="rgba(61,214,198,0.08)"/>
+            <text x="90" y="95" text-anchor="middle" fill="#9aa3b5" font-size="10" font-family="system-ui,sans-serif">config</text>
+            <text x="90" y="112" text-anchor="middle" fill="#f4f5f7" font-size="11" font-weight="600" font-family="system-ui,sans-serif">YAML</text>
+            <path d="M145 98 L175 98" stroke="#4b5563" stroke-width="2" marker-end="url(#arr)"/>
+            <rect x="175" y="55" width="200" height="90" rx="14" stroke="#f0b429" stroke-width="2.5" fill="rgba(240,180,41,0.1)"/>
+            <text x="275" y="88" text-anchor="middle" fill="#f4f5f7" font-size="13" font-weight="600" font-family="system-ui,sans-serif">stack-mcp-server</text>
+            <text x="275" y="108" text-anchor="middle" fill="#9aa3b5" font-size="10" font-family="system-ui,sans-serif">8765 · Streamable HTTP</text>
+            <text x="275" y="128" text-anchor="middle" fill="#3dd6c6" font-size="9" font-family="monospace">modules.*.enabled</text>
+            <path d="M378 98 L410 98" stroke="#4b5563" stroke-width="2"/>
+            <rect x="410" y="62" width="190" height="76" rx="10" stroke="#6b7280" stroke-dasharray="4 3" fill="rgba(0,0,0,0.15)"/>
+            <text x="505" y="88" text-anchor="middle" fill="#9aa3b5" font-size="10" font-family="system-ui,sans-serif">Каталог tools</text>
+            <text x="505" y="108" text-anchor="middle" fill="#9aa3b5" font-size="10" font-family="system-ui,sans-serif">для агента</text>
+            <defs>
+              <marker id="arr" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6 Z" fill="#4b5563"/></marker>
+            </defs>
+          </svg>
+        </div>
+        <div class="chips">
+          <span class="chip good">Секреты не в ответах</span>
+          <span class="chip good">Политики</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" aria-label="Модули">
+      <div class="slide-meta"><span>stack-mcp-server</span><span><b>04</b> / 06</span></div>
+      <div class="slide-body">
+        <div class="slide-top">
+          <h1>Все направления — в одной модульной платформе</h1>
+          <p class="tagline">Прод-образ <code>stack-mcp:0.3.0</code></p>
+        </div>
+        <div class="mod-grid" aria-label="Модули">
+          <div class="mod">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#3dd6c6" stroke-width="1.5"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/><path d="M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>
+            <span>PostgreSQL</span>
+          </div>
+          <div class="mod">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#f0b429" stroke-width="1.5"><path d="M12 2L4 7v10l8 5 8-5V7l-8-5z"/></svg>
+            <span>Redis</span>
+          </div>
+          <div class="mod">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#9aa3b5" stroke-width="1.5"><rect x="5" y="4" width="5" height="16" rx="1"/><rect x="14" y="8" width="5" height="12" rx="1"/></svg>
+            <span>Kafka</span>
+          </div>
+          <div class="mod">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#3dd6c6" stroke-width="1.5"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+            <span>OpenSearch</span>
+          </div>
+          <div class="mod">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="1.5" stroke-linejoin="round"><path d="M12 2c0 5-5 8-5 14a5 5 0 0010 0c0-6-5-9-5-14z"/></svg>
+            <span>Prometheus</span>
+          </div>
+          <div class="mod">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#f4f5f7" stroke-width="1.5"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M7 8h6M7 12h10"/></svg>
+            <span>SSH</span>
+          </div>
+          <div class="mod muted">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#6b7289" stroke-width="1.5"><path d="M4 10h16v8H4zM8 10V7a4 4 0 0 1 8 0v3"/><path d="M6 18L18 6" stroke="#f87171"/></svg>
+            <span>S3 выкл.</span>
+          </div>
+          <div class="mod">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="1.5"><path d="M9 12l2 2 4-4"/><rect x="3" y="3" width="18" height="18" rx="3"/></svg>
+            <span>Статус · политика</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" aria-label="Контур">
+      <div class="slide-meta"><span>stack-mcp-server</span><span><b>05</b> / 06</span></div>
+      <div class="slide-body">
+        <div class="slide-top">
+          <h1>Один контур: доступ, наблюдение, документация</h1>
+          <p class="tagline">Прод за reverse proxy, плюс UI и метрики на том же сервисе</p>
+        </div>
+        <div class="figure-wrap" aria-hidden="true">
+          <svg viewBox="0 0 640 220" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="60" y="40" width="520" height="44" rx="8" stroke="#6b7280" stroke-dasharray="5 4" fill="rgba(255,255,255,0.02)"/>
+            <text x="320" y="67" text-anchor="middle" fill="#6b7289" font-size="11" font-family="system-ui,sans-serif">Интернет / пользователи</text>
+            <rect x="200" y="100" width="240" height="48" rx="8" stroke="#3dd6c6" stroke-width="2" fill="rgba(61,214,198,0.06)"/>
+            <text x="320" y="122" text-anchor="middle" fill="#f4f5f7" font-size="12" font-weight="600" font-family="system-ui,sans-serif">Reverse proxy · TLS</text>
+            <text x="320" y="138" text-anchor="middle" fill="#9aa3b5" font-size="9" font-family="system-ui,sans-serif">firewall</text>
+            <rect x="140" y="165" width="140" height="40" rx="8" stroke="#f0b429" stroke-width="1.8" fill="rgba(240,180,41,0.08)"/>
+            <text x="210" y="188" text-anchor="middle" fill="#9aa3b5" font-size="10" font-family="system-ui,sans-serif">/mcp</text>
+            <rect x="300" y="165" width="100" height="40" rx="8" stroke="#6b7280" fill="rgba(0,0,0,0.15)"/>
+            <text x="350" y="188" text-anchor="middle" fill="#9aa3b5" font-size="10" font-family="system-ui,sans-serif">UI</text>
+            <rect x="420" y="165" width="100" height="40" rx="8" stroke="#6b7280" fill="rgba(0,0,0,0.15)"/>
+            <text x="470" y="188" text-anchor="middle" fill="#9aa3b5" font-size="10" font-family="system-ui,sans-serif">/metrics</text>
+            <path d="M320 84 L320 100" stroke="#4b5563" stroke-width="1.5"/>
+            <path d="M320 148 L210 165 M320 148 L350 165 M320 148 L470 165" stroke="#4b5563" stroke-width="1.2"/>
+          </svg>
+        </div>
+        <div class="chips">
+          <span class="chip">CAPABILITIES.md</span>
+          <span class="chip">SSH_SCALE.md</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" aria-label="Эффект">
+      <div class="slide-meta"><span>stack-mcp-server</span><span><b>06</b> / 06</span></div>
+      <div class="slide-body">
+        <div class="slide-top">
+          <h1>Язык цифр для финансов и операций</h1>
+          <p class="tagline">Ориентиры на слайде — ваши факты проговариваете вы</p>
+        </div>
+        <div class="kpi-visual">
+          <div class="kpi-row">
+            <div class="kpi-item">
+              <label><strong>MTTR</strong><span class="val">−20…40%</span></label>
+              <div class="bar"><i style="width:72%"></i></div>
+            </div>
+            <div class="kpi-item">
+              <label><strong>Часы L2 / NOC</strong><span class="val">−X</span></label>
+              <div class="bar"><i style="width:55%"></i></div>
+            </div>
+            <div class="kpi-item">
+              <label><strong>Точки «ИИ ↔ стек»</strong><span class="val">1</span></label>
+              <div class="bar"><i style="width:100%"></i></div>
+            </div>
+            <div class="kpi-item">
+              <label><strong>Контроль действий</strong><span class="val">да</span></label>
+              <div class="bar"><i style="width:88%"></i></div>
+            </div>
+          </div>
+        </div>
+        <div class="cta-row">
+          <div class="cta">
+            <svg viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="14" stroke="#f4c14a" stroke-width="2"/><path d="M16 10v8l5 3" stroke="#4eeadb" stroke-width="2" stroke-linecap="round"/></svg>
+            <div class="cta-text"><b>Пилот</b><span class="cta-sub">срок, охват, критерий успеха</span></div>
+          </div>
+          <div class="cta">
+            <svg viewBox="0 0 32 32" fill="none"><path d="M8 26V10l8-4 8 4v16" stroke="#4eeadb" stroke-width="2"/><path d="M12 22l4 4 8-8" stroke="#f4c14a" stroke-width="2"/></svg>
+            <div class="cta-text"><b>Владелец и бюджет</b><span class="cta-sub">KPI из таблицы — до старта</span></div>
+          </div>
+          <div class="cta">
+            <svg viewBox="0 0 32 32" fill="none"><rect x="6" y="8" width="20" height="18" rx="2" stroke="#a8b0c2" stroke-width="2"/><path d="M10 14h12M10 19h8" stroke="#f8f9fb" stroke-width="1.5"/></svg>
+            <div class="cta-text"><b>История вцифрах</b><span class="cta-sub">2–4 квартала для сравнения</span></div>
+          </div>
+        </div>
+        <div class="chips" style="margin-top:0.6rem">
+          <span class="chip">← → пробел</span>
+          <span class="chip">Печать Ctrl+P</span>
+        </div>
+      </div>
+    </section>
+  </div>
+  <p class="nav-hint">← → · пробел · края слайда</p>
+  <script>
+    (function () {
+      var slides = [].slice.call(document.querySelectorAll(".slide"));
+      var total = slides.length;
+      var bar = document.querySelector(".progress i");
+      var i = 0;
+      function show(n) {
+        i = (n + total) % total;
+        slides.forEach(function (s, j) { s.classList.toggle("active", j === i); });
+        slides.forEach(function (s, j) {
+          var el = s.querySelector(".slide-meta span:last-child");
+          if (el) el.innerHTML = "<b>" + String(j + 1).padStart(2, "0") + "</b> / " + String(total).padStart(2, "0");
+        });
+        bar.style.width = ((i + 1) / total * 100) + "%";
+      }
+      document.addEventListener("keydown", function (e) {
+        if (e.key === "ArrowRight" || e.key === " " || e.key === "PageDown") { e.preventDefault(); show(i + 1); }
+        if (e.key === "ArrowLeft" || e.key === "PageUp") { e.preventDefault(); show(i - 1); }
+        if (e.key === "Home") show(0);
+        if (e.key === "End") show(total - 1);
+      });
+      document.getElementById("deck").addEventListener("click", function (e) {
+        var r = e.currentTarget.getBoundingClientRect();
+        show(i + ((e.clientX - r.left) > r.width / 2 ? 1 : -1));
+      });
+      show(0);
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+﻿.git
+.venv
+__pycache__
+*.py[cod]
+*.egg-info
+logs
+agent-transcripts
+.cursor
+.vscode
+docker-compose.yml
+docker/postgres
+scripts
