@@ -3,15 +3,28 @@
 Формат основан на принципах [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/).
 Версии соответствуют [семантическому версионированию](https://semver.org/lang/ru/).
 
+## [0.2.6] — 2026-05-02
+
+### Изменено
+
+- Версия пакета и теги образов по умолчанию — **0.2.6**.
+- Журнал: раздел **0.2.5** дополнен фактическим перечнем изменений из того релиза (первоначальное сообщение коммита описывало только правки версий Docker).
+
 ## [0.2.5] — 2026-05-02
+
+### Добавлено
+
+- **PostgreSQL:** опциональные запросы из белого списка (`allowlisted_queries`) с проверкой SQL на read-only в `postgres_allowlist_sql.py`, интеграция в `postgres_tools`, тесты `tests/test_postgres_allowlist.py`.
+- **Тесты:** путь Streamable HTTP MCP (`/mcp` и кастомный путь) — `tests/test_embed_mcp_path.py`; валидация SSH-команд — `tests/test_ssh_command_validate.py` (пустые команды, shell-операторы, встроенный safety filter).
+
+### Изменено
+
+- **Веб-UI** (`info_app.py`): существенные доработки интерфейса и связанной логики.
+- **MCP-сервер** (`server.py`), **конфиг** (`config.py`), примеры **`config.example.yaml`** / **`deploy/config.production.example.yaml`**, **`docs/CAPABILITIES.md`**, прод **`deploy/docker-compose.prod.yml`**, **`deploy/README.md`**, **`deploy/env.production.example`**, тест **`tests/test_health.py`**.
 
 ### Исправлено
 
 - Устаревшие номера **0.3.0** приведены к линейке релиза: `LABEL` в корневом `Dockerfile`, `image` в `docker-compose.mcp.yml`, тексты и имена архивов в `deploy/BUNDLE.md`. В `docker-compose.mcp.yml` и `BUNDLE.md` имя образа выровнено с прод-сборкой: **`stack-mcp-ui`** (как в `deploy/Dockerfile`).
-
-### Изменено
-
-- Версия пакета и теги образов по умолчанию — **0.2.5**.
 
 ## [0.2.4] — 2026-05-02
 

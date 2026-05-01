@@ -50,7 +50,7 @@ _INVOKE_ALLOWLIST: dict[str, dict[str, Any] | None] = {
     "ssh_command_policy": {},
 }
 
-app = FastAPI(title="stack-mcp UI", version="0.2.5")
+app = FastAPI(title="stack-mcp UI", version="0.2.6")
 
 _trusted_hosts_raw = (os.environ.get("STACK_MCP_UI_TRUSTED_HOSTS") or "").strip()
 if _trusted_hosts_raw:
