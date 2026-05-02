@@ -1,4 +1,4 @@
-# Готовый комплект `stack-mcp-server` (релиз 0.2.6)
+# Готовый комплект `stack-mcp-server` (релиз 0.2.7)
 
 ## Что входит
 
@@ -21,11 +21,11 @@
 Из корня репозитория (`E:\git\mcp-server` или клон):
 
 ```bash
-docker build -f deploy/Dockerfile -t stack-mcp-ui:0.2.6 .
-docker save stack-mcp-ui:0.2.6 -o deploy/stack-mcp-ui-0.2.6.tar
+docker build -f deploy/Dockerfile -t stack-mcp-ui:0.2.7 .
+docker save stack-mcp-ui:0.2.7 -o deploy/stack-mcp-ui-0.2.7.tar
 ```
 
-На целевой машине: `docker load -i deploy/stack-mcp-ui-0.2.6.tar`.
+На целевой машине: `docker load -i deploy/stack-mcp-ui-0.2.7.tar`.
 
 ## Сотни SSH-серверов
 

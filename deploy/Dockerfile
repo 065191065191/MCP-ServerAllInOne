@@ -1,5 +1,5 @@
 # Образ: веб UI + встроенный MCP Streamable HTTP на одном порту (8888, путь /mcp).
-# Сборка: docker build -f deploy/Dockerfile -t stack-mcp-ui:0.2.6 .
+# Сборка: docker build -f deploy/Dockerfile -t stack-mcp-ui:0.2.7 .
 FROM python:3.12-slim-bookworm AS runtime
 
 RUN apt-get update \

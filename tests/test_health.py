@@ -33,6 +33,30 @@ def test_cron_page_ok() -> None:
         assert r2.status_code == 200
 
 
+def test_executive_dashboard_page_ok() -> None:
+    from stack_mcp.info_app import app
+
+    with TestClient(app) as client:
+        r = client.get("/dashboard")
+        assert r.status_code == 200
+        assert "dashboard-stats" in r.text
+
+
+def test_dashboard_stats_json(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    cfg = tmp_path / "test.yaml"
+    cfg.write_text("modules: {}\n", encoding="utf-8")
+    monkeypatch.setenv("STACK_MCP_CONFIG", str(cfg))
+    from stack_mcp.info_app import app
+
+    with TestClient(app) as client:
+        r = client.get("/api/dashboard-stats")
+        assert r.status_code == 200
+        data = r.json()
+        assert "summary" in data
+        assert "modules" in data
+        assert data["summary"]["mcp_enabled_count"] == 0
+
+
 def test_ready_with_valid_config(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     cfg = tmp_path / "test.yaml"
     cfg.write_text("modules: {}\n", encoding="utf-8")

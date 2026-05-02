@@ -24,6 +24,7 @@ from stack_mcp.backend_tls import (
     prometheus_httpx_verify_and_cert,
 )
 from stack_mcp.config import AppConfig, load_config
+from stack_mcp.executive_dashboard_html import DASHBOARD_HTML
 from stack_mcp.kafka_tools import kafka_broker_client_config
 from stack_mcp.mail_tools import mail_imap_verify
 from stack_mcp.mtls import resolve_mcp_mtls_uvicorn_kwargs
@@ -50,7 +51,7 @@ _INVOKE_ALLOWLIST: dict[str, dict[str, Any] | None] = {
     "ssh_command_policy": {},
 }
 
-app = FastAPI(title="stack-mcp UI", version="0.2.6")
+app = FastAPI(title="stack-mcp UI", version="0.2.7")
 
 _trusted_hosts_raw = (os.environ.get("STACK_MCP_UI_TRUSTED_HOSTS") or "").strip()
 if _trusted_hosts_raw:
@@ -292,6 +293,95 @@ def _cfg() -> AppConfig:
     return load_config()
 
 
+_DASHBOARD_MODULE_META: tuple[tuple[str, str, str], ...] = (
+    ("postgres", "PostgreSQL", "БД"),
+    ("redis", "Redis", "Кэш"),
+    ("kafka", "Kafka", "Потоки"),
+    ("prometheus", "Prometheus", "Метрики"),
+    ("opensearch", "OpenSearch", "Поиск / логи"),
+    ("mail", "Mail", "Почта"),
+    ("ssh", "SSH", "Доступ"),
+)
+
+
+def _build_dashboard_stats(cfg: AppConfig) -> dict[str, Any]:
+    checks: dict[str, dict[str, Any]] = {
+        "postgres": _check_postgres(cfg),
+        "redis": _check_redis(cfg),
+        "kafka": _check_kafka(cfg),
+        "prometheus": _check_prometheus(cfg),
+        "opensearch": _check_opensearch(cfg),
+        "mail": _check_mail(cfg),
+        "ssh": _check_ssh(cfg),
+    }
+    me = cfg.modules
+    modules_enabled = {
+        "postgres": me.postgres.enabled,
+        "redis": me.redis.enabled,
+        "kafka": me.kafka.enabled,
+        "prometheus": me.prometheus.enabled,
+        "opensearch": me.opensearch.enabled,
+        "mail": me.mail.enabled,
+        "ssh": me.ssh.enabled,
+    }
+    modules_out: list[dict[str, Any]] = []
+    for key, label, typ in _DASHBOARD_MODULE_META:
+        st = checks[key]
+        en = modules_enabled[key]
+        lat = st.get("latency_ms")
+        latency = int(lat) if isinstance(lat, int) else None
+        modules_out.append(
+            {
+                "id": key,
+                "name": label,
+                "type": typ,
+                "enabled": en,
+                "ok": bool(st.get("ok")),
+                "skipped": bool(st.get("skipped")),
+                "latency_ms": latency,
+                "detail": str(st.get("detail", ""))[:300],
+            }
+        )
+    enabled_cnt = sum(1 for v in modules_enabled.values() if v)
+    healthy_cnt = sum(1 for k, en in modules_enabled.items() if en and checks[k].get("ok"))
+    latencies = [
+        int(checks[k]["latency_ms"])
+        for k in modules_enabled
+        if modules_enabled[k] and isinstance(checks[k].get("latency_ms"), int)
+    ]
+    avg_lat = int(sum(latencies) / len(latencies)) if latencies else 0
+    uptime_pct = round(100.0 * healthy_cnt / enabled_cnt, 1) if enabled_cnt else 100.0
+    with _METRICS_LOCK:
+        snap = dict(_UI_METRICS)
+    limiter = _rate_limiter_window_stats()
+    return {
+        "collected_at": int(time.time()),
+        "data_sources_note": (
+            "Факт: health и latency — прямые проверки UI к модулям из конфига; "
+            "обращения — счётчик stack_mcp_ui_requests_total (защищённые /api/*). "
+            "Gateway /mcp/*, Nacos, Jira в этой сборке не агрегируются — подключите в проде по описанию заказчика."
+        ),
+        "summary": {
+            "mcp_enabled_count": enabled_cnt,
+            "mcp_healthy_count": healthy_cnt,
+            "ui_requests_total": int(snap.get("requests_total", 0.0)),
+            "ui_events_last_minute": limiter["events_last_minute"],
+            "ui_active_ips": limiter["active_ips"],
+            "avg_check_latency_ms": avg_lat,
+            "uptime_score_pct": min(100.0, uptime_pct),
+        },
+        "modules": modules_out,
+        "business_defaults": {
+            "rub_per_hour": 1875,
+            "incidents_month": 1200,
+            "mcp_response_sec": 12,
+            "manual_min_min": 3,
+            "manual_max_min": 15,
+            "complexity_multipliers": {"one_mcp": 1.0, "multi_mcp": 1.4},
+        },
+    }
+
+
 def _check_postgres(cfg: AppConfig) -> dict[str, Any]:
     if not cfg.modules.postgres.enabled:
         return {"ok": False, "skipped": True, "detail": "postgres module disabled"}
@@ -517,7 +607,32 @@ async def ready() -> JSONResponse:
 
 @app.get("/", response_class=HTMLResponse)
 async def index() -> str:
-    return _INDEX_HTML
+    return DASHBOARD_HTML
+
+
+@app.get("/dashboard", response_class=HTMLResponse)
+async def executive_dashboard() -> str:
+    return DASHBOARD_HTML
+
+
+@app.get("/ops", response_class=HTMLResponse)
+async def ops_console() -> str:
+    return _OPS_HTML
+
+
+@app.get("/api/dashboard-stats")
+async def api_dashboard_stats(req: Request) -> JSONResponse:
+    """Агрегат для главного дашборда: реальные проверки модулей и телеметрия UI."""
+    started = time.perf_counter()
+    ok = False
+    try:
+        _secure_api(req, "dashboard_stats")
+        cfg = _cfg()
+        body = _build_dashboard_stats(cfg)
+        ok = True
+        return JSONResponse(body)
+    finally:
+        _record_request_timing(started, ok)
 
 
 @app.get("/api/auth-config")
@@ -902,51 +1017,37 @@ async def api_postgres_allowlist(req: Request) -> JSONResponse:
         _record_request_timing(started, ok)
 
 
-_INDEX_HTML = """<!DOCTYPE html>
+_OPS_HTML = """<!DOCTYPE html>
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>stack-mcp demo</title>
+  <title>stack-mcp — консоль</title>
   <style>
     :root {
-      color-scheme: light dark;
-      --bg: #f4f4f2;
-      --surface: #fdfdfc;
-      --text: #1a1a18;
-      --muted: #5e5e5a;
-      --border: rgba(26, 26, 24, 0.12);
-      --accent: #4a5d66;
-      --accent-soft: rgba(74, 93, 102, 0.14);
-      --ok: #2d6a4f;
-      --ok-bg: rgba(45, 106, 79, 0.12);
-      --bad: #9b2226;
-      --bad-bg: rgba(155, 34, 38, 0.1);
-      --skip: #7c5e10;
-      --skip-bg: rgba(124, 94, 16, 0.12);
-      --radius: 10px;
-      --radius-sm: 6px;
+      --bg: #020304;
+      --surface: #080b10;
+      --surface2: #0d0f16;
+      --text: #eef3ff;
+      --muted: #8d99ab;
+      --border: #171b23;
+      --accent: #10b981;
+      --accent-soft: rgba(16, 185, 129, 0.14);
+      --ok: #10b981;
+      --ok-bg: rgba(16, 185, 129, 0.12);
+      --bad: #f97316;
+      --bad-bg: rgba(249, 115, 22, 0.12);
+      --skip: #6b7280;
+      --skip-bg: rgba(107, 114, 128, 0.15);
+      --radius: 20px;
+      --radius-sm: 12px;
       font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    }
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --bg: #141413;
-        --surface: #1c1c1a;
-        --text: #e8e8e4;
-        --muted: #9c9c96;
-        --border: rgba(232, 232, 228, 0.1);
-        --accent: #a8b8bf;
-        --accent-soft: rgba(168, 184, 191, 0.18);
-        --ok: #6bbf8a;
-        --ok-bg: rgba(107, 191, 138, 0.14);
-        --bad: #f08080;
-        --bad-bg: rgba(240, 128, 128, 0.12);
-        --skip: #e0c36a;
-        --skip-bg: rgba(224, 195, 106, 0.12);
-      }
     }
     * { box-sizing: border-box; }
     body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--text); line-height: 1.55; }
+    .nav-mini { font-size: 12px; margin: 0 0 1rem; }
+    .nav-mini a { color: var(--accent); text-decoration: none; font-weight: 500; }
+    .nav-mini a:hover { text-decoration: underline; }
     .skip-link {
       position: absolute;
       left: -9999px;
@@ -958,7 +1059,7 @@ _INDEX_HTML = """<!DOCTYPE html>
       text-decoration: none;
     }
     .skip-link:focus { left: 1rem; top: 1rem; }
-    .shell { max-width: 1080px; margin: 0 auto; padding: 1.5rem 1.15rem 2.5rem; }
+    .shell { max-width: 1120px; margin: 0 auto; padding: 1.75rem 1.35rem 2.75rem; }
     .page-head {
       padding: 0 0 1.1rem;
       margin-bottom: 1rem;
@@ -1009,7 +1110,7 @@ _INDEX_HTML = """<!DOCTYPE html>
       padding: 0.5rem 0.7rem;
       border-radius: var(--radius-sm);
       border: 1px solid var(--border);
-      background: var(--bg);
+      background: var(--surface2);
       color: var(--text);
       font-size: 0.9rem;
     }
@@ -1078,7 +1179,7 @@ _INDEX_HTML = """<!DOCTYPE html>
       gap: 0.75rem;
       padding: 0.55rem 0.75rem;
       border-bottom: 1px solid var(--border);
-      background: var(--bg);
+      background: var(--surface2);
     }
     .card-head strong { font-size: 0.88rem; font-weight: 600; }
     .badge {
@@ -1105,7 +1206,7 @@ _INDEX_HTML = """<!DOCTYPE html>
     pre {
       white-space: pre-wrap;
       word-break: break-word;
-      background: var(--bg);
+      background: var(--surface2);
       padding: 0.75rem 0.9rem;
       border-radius: var(--radius-sm);
       border: 1px solid var(--border);
@@ -1131,13 +1232,12 @@ _INDEX_HTML = """<!DOCTYPE html>
 <body>
   <a class="skip-link" href="#main">К основному содержимому</a>
   <div class="shell">
+  <p class="nav-mini"><a href="/">Дашборд</a> · <a href="/cron-page">Крон / allowlist</a> · <a href="/status-page">Статус и /metrics</a></p>
   <header class="page-head">
-    <h1>stack-mcp — демо UI</h1>
-    <p class="lede">Сначала доступ к API, затем обновление статуса. Подключение к сервисам и вспомогательные метрики — во вкладках ниже; вызовы MCP и запись данных — отдельно, чтобы не мешать обзору.</p>
+    <h1>Консоль — диагностика и MCP</h1>
+    <p class="lede">Токены, статус интеграций, превью Prometheus и отладочные вызовы инструментов. Сводка и модель ROI — на главной странице.</p>
     <nav class="top-links" aria-label="Связанные страницы">
-      <a href="/status-page">Текст /metrics и очередь</a>
-      <a href="/cron-page">Крон и именованные SQL (Postgres)</a>
-      <span class="muted">Метрики — токен из шага 1</span>
+      <span class="muted">Метрики — отдельный токен, см. блок «Доступ»</span>
     </nav>
   </header>
 
@@ -1192,10 +1292,10 @@ _INDEX_HTML = """<!DOCTYPE html>
       <h2 class="section-title">Очередь и лимиты</h2>
       <p class="section-note"><strong>kafka_queue</strong> — оценка объёма сообщений по allowlist (не замена мониторинга кластера). <strong>ui_rate_limiter</strong> — нагрузка на <code>/api/*</code>, не статус брокеров или БД.</p>
       <div class="row" id="status-aux"></div>
-      <h2 class="section-title" style="margin-top:1.25rem;">Текст /metrics</h2>
-      <p class="section-note">Сырой вывод для Prometheus; нужен токен метрик, если сервер его требует.</p>
+      <h2 class="section-title" style="margin-top:1.25rem;">Статус и /metrics</h2>
+      <p class="section-note">Тот же текст, что на странице <a href="/status-page" style="color:var(--accent);">/status-page</a> — сырой вывод для Prometheus; нужен токен метрик, если сервер его требует.</p>
       <div class="btn-row" style="margin-bottom:0.5rem;">
-        <button type="button" id="btn-metrics">Обновить превью /metrics</button>
+        <button type="button" id="btn-metrics">Обновить превью экспозиции /metrics</button>
       </div>
       <pre id="metrics-preview">—</pre>
     </div>
@@ -1402,7 +1502,7 @@ _STATUS_HTML = """<!DOCTYPE html>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>stack-mcp status</title>
+  <title>Статус и /metrics — stack-mcp</title>
   <style>
     :root {
       color-scheme: light dark;
@@ -1487,7 +1587,7 @@ _STATUS_HTML = """<!DOCTYPE html>
 <body>
   <div class="shell">
   <header class="hero">
-    <p class="back"><a href="/">← Демо UI</a> · <a href="/cron-page">Крон / allowlist Postgres</a></p>
+    <p class="back"><a href="/">← Дашборд</a> · <a href="/ops">Консоль</a> · <a href="/cron-page">Крон / allowlist Postgres</a></p>
     <h1>Статус и /metrics</h1>
   </header>
   <div class="panel">
@@ -1612,7 +1712,7 @@ _CRON_HTML = """<!DOCTYPE html>
 <body>
   <div class="shell">
   <header class="page-head">
-    <p class="nav"><a href="/">← Демо UI</a> · <a href="/status-page">/metrics</a></p>
+    <p class="nav"><a href="/">← Дашборд</a> · <a href="/ops">Консоль</a> · <a href="/status-page">Статус и /metrics</a></p>
     <h1>Крон и именованные запросы Postgres</h1>
     <p class="muted">В stack-mcp <strong>нет встроенного планировщика</strong>. Внешний крон (systemd, Kubernetes CronJob, CI) вызывает MCP-инструмент <code>postgres_allowlisted_query</code> с аргументом <code>query_id</code>. Текст SQL хранится только в <code>modules.postgres.allowlisted_queries</code> в YAML — клиенты и крон передают лишь id.</p>
   </header>

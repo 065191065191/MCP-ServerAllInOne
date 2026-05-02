@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "stack-mcp-server"
-version = "0.2.6"
+version = "0.2.7"
 description = "MCP по HTTP: модули данных и опциональный браузерный MCP (mcp-playwright)"
 readme = "README.md"
 authors = [{ name = "Gos Stepan Ulievich" }]
