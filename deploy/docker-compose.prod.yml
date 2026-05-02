@@ -9,7 +9,7 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile
-    image: stack-mcp-ui:${STACK_MCP_IMAGE_TAG:-0.2.7}
+    image: stack-mcp-ui:${STACK_MCP_IMAGE_TAG:-0.2.8}
     restart: unless-stopped
     env_file:
       - .env
