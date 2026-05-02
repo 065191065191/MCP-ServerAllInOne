@@ -1,0 +1,96 @@
+# Пример Deployment только для процесса stack-mcp (без UI).
+# Тот же образ, что UI, entrypoint переопределён на stack-mcp.
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: stack-mcp-config
+  labels:
+    app: stack-mcp
+data:
+  config.yaml: |
+    modules: {}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stack-mcp
+  labels:
+    app: stack-mcp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: stack-mcp
+  template:
+    metadata:
+      labels:
+        app: stack-mcp
+    spec:
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: stack-mcp
+          image: stack-mcp-ui:0.2.9
+          imagePullPolicy: IfNotPresent
+          command: ["stack-mcp"]
+          ports:
+            - name: mcp
+              containerPort: 8765
+              protocol: TCP
+          env:
+            - name: STACK_MCP_CONFIG
+              value: /config/config.yaml
+            - name: STACK_MCP_HOST
+              value: "0.0.0.0"
+            - name: STACK_MCP_PORT
+              value: "8765"
+            - name: STACK_MCP_TRANSPORT
+              value: streamable-http
+            # Service без sessionAffinity / несколько реплик: раскомментируйте
+            # - name: STACK_MCP_STATELESS_HTTP
+            #   value: "true"
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+          readinessProbe:
+            tcpSocket:
+              port: mcp
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: mcp
+            initialDelaySeconds: 20
+            periodSeconds: 30
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+      volumes:
+        - name: config
+          configMap:
+            name: stack-mcp-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: stack-mcp
+  labels:
+    app: stack-mcp
+spec:
+  selector:
+    app: stack-mcp
+  ports:
+    - name: mcp
+      port: 8765
+      targetPort: mcp

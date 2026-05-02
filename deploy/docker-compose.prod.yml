@@ -9,13 +9,14 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile
-    image: stack-mcp-ui:${STACK_MCP_IMAGE_TAG:-0.2.8}
+    image: stack-mcp-ui:${STACK_MCP_IMAGE_TAG:-0.2.9}
     restart: unless-stopped
     env_file:
       - .env
     environment:
       STACK_MCP_CONFIG: /etc/stack-mcp/config.yaml
       STACK_MCP_EMBED_MCP: "true"
+      STACK_MCP_STATELESS_HTTP: ${STACK_MCP_STATELESS_HTTP:-}
     ports:
       - "${STACK_MCP_UI_BIND:-127.0.0.1}:${STACK_MCP_UI_PORT:-8888}:8888"
     volumes:

@@ -1,5 +1,5 @@
 # Образ: веб UI + встроенный MCP Streamable HTTP на одном порту (8888, путь /mcp).
-# Сборка: docker build -f deploy/Dockerfile -t stack-mcp-ui:0.2.8 .
+# Сборка: docker build -f deploy/Dockerfile -t stack-mcp-ui:0.2.9 .
 FROM python:3.12-slim-bookworm AS runtime
 
 RUN apt-get update \
@@ -16,6 +16,7 @@ RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir .
 
 USER stackmcp
+# Опционально при запуске контейнера: STACK_MCP_STATELESS_HTTP=true — stateless Streamable HTTP (см. README).
 ENV PYTHONUNBUFFERED=1 \
     STACK_MCP_UI_HOST=0.0.0.0 \
     STACK_MCP_UI_PORT=8888 \

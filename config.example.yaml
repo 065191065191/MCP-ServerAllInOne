@@ -2,6 +2,8 @@
 #
 # MCP процесс (stack-mcp): HTTP по умолчанию — STACK_MCP_TRANSPORT=streamable-http,
 # STACK_MCP_HOST=0.0.0.0, STACK_MCP_PORT=8765, путь /mcp. Localhost без STACK_MCP_DEV_LOCAL=true запрещён.
+# Stateless Streamable HTTP (несколько воркеров / подов без sticky): переменная процесса STACK_MCP_STATELESS_HTTP=true
+# (не поле YAML) — см. README и deploy/README.md.
 #
 # mTLS (HTTPS + обязательный клиентский сертификат): только если заданы все три файла —
 #   STACK_MCP_MTLS_CERT_FILE, STACK_MCP_MTLS_KEY_FILE, STACK_MCP_MTLS_ROOT_CA_FILE

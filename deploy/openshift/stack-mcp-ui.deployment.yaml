@@ -1,0 +1,113 @@
+# Пример Deployment/Service для OpenShift / Kubernetes.
+#
+# Перед применением: укажите image из вашего реестра; пути volume — внутри Pod.
+# Secret с токенами — отдельно, например:
+#   oc create secret generic stack-mcp-ui-env \
+#     --from-literal=STACK_MCP_UI_TOKEN=... \
+#     --from-literal=STACK_MCP_METRICS_TOKEN=...
+# и раскомментируйте envFrom.
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: stack-mcp-config
+  labels:
+    app: stack-mcp-ui
+data:
+  config.yaml: |
+    modules:
+      postgres:
+        enabled: false
+      redis:
+        enabled: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stack-mcp-ui
+  labels:
+    app: stack-mcp-ui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: stack-mcp-ui
+  template:
+    metadata:
+      labels:
+        app: stack-mcp-ui
+    spec:
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: stack-mcp-ui
+          image: stack-mcp-ui:0.2.9
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8888
+              protocol: TCP
+          env:
+            - name: STACK_MCP_CONFIG
+              value: /config/config.yaml
+            - name: STACK_MCP_EMBED_MCP
+              value: "true"
+            - name: STACK_MCP_UI_WORKERS
+              value: "1"
+            # Несколько реплик без sticky / UI_WORKERS>1: раскомментируйте
+            # - name: STACK_MCP_STATELESS_HTTP
+            #   value: "true"
+          # envFrom:
+          #   - secretRef:
+          #       name: stack-mcp-ui-env
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+            - name: logs
+              mountPath: /app/logs
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 30
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: false
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+      volumes:
+        - name: config
+          configMap:
+            name: stack-mcp-config
+        - name: logs
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: stack-mcp-ui
+  labels:
+    app: stack-mcp-ui
+spec:
+  selector:
+    app: stack-mcp-ui
+  ports:
+    - name: http
+      port: 8888
+      targetPort: http

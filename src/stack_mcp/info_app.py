@@ -51,7 +51,7 @@ _INVOKE_ALLOWLIST: dict[str, dict[str, Any] | None] = {
     "ssh_command_policy": {},
 }
 
-app = FastAPI(title="stack-mcp UI", version="0.2.8")
+app = FastAPI(title="stack-mcp UI", version="0.2.9")
 
 _trusted_hosts_raw = (os.environ.get("STACK_MCP_UI_TRUSTED_HOSTS") or "").strip()
 if _trusted_hosts_raw:
@@ -1797,10 +1797,11 @@ def main() -> None:
     if (
         workers > 1
         and (os.environ.get("STACK_MCP_EMBED_MCP") or "").strip().lower() in ("1", "true", "yes")
+        and (os.environ.get("STACK_MCP_STATELESS_HTTP") or "").strip().lower() not in ("1", "true", "yes", "on")
     ):
         log.warning(
-            "STACK_MCP_EMBED_MCP with STACK_MCP_UI_WORKERS>1 can break MCP Streamable HTTP sessions; "
-            "use STACK_MCP_UI_WORKERS=1."
+            "STACK_MCP_EMBED_MCP with STACK_MCP_UI_WORKERS>1 can break stateful MCP Streamable HTTP sessions; "
+            "use STACK_MCP_UI_WORKERS=1 or set STACK_MCP_STATELESS_HTTP=true."
         )
     run_kw: dict[str, Any] = {
         "host": host,

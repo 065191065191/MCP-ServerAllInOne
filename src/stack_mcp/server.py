@@ -35,6 +35,11 @@ from stack_mcp.config import (
 from stack_mcp.mtls import resolve_mcp_mtls_uvicorn_kwargs
 
 
+def _env_truthy(name: str) -> bool:
+    v = (os.environ.get(name) or "").strip().lower()
+    return v in ("1", "true", "yes", "on")
+
+
 def _register_postgres(mcp: FastMCP, cfg: PostgresModuleConfig) -> None:
     @mcp.tool()
     def postgres_connections_overview() -> str:
@@ -442,6 +447,8 @@ def build_mcp(
     }
     if streamable_http_path is not None:
         _fm_kw["streamable_http_path"] = streamable_http_path
+    if _env_truthy("STACK_MCP_STATELESS_HTTP"):
+        _fm_kw["stateless_http"] = True
     mcp = FastMCP(**_fm_kw)
 
     @mcp.tool()
@@ -449,6 +456,7 @@ def build_mcp(
         """Which backends are enabled in config (no credentials)."""
         return json.dumps(
             {
+                "stateless_http": mcp.settings.stateless_http,
                 "postgres": app.modules.postgres.enabled,
                 "postgres_allowlisted_query_ids": (
                     [q.id for q in app.modules.postgres.allowlisted_queries]
@@ -553,6 +561,10 @@ def main() -> None:
         sys.exit(_LOCALHOST_DISABLED)
 
     mcp = build_mcp(cfg, host=host, port=port)
+    if _env_truthy("STACK_MCP_STATELESS_HTTP"):
+        log.info(
+            "MCP Streamable HTTP: stateless mode (STACK_MCP_STATELESS_HTTP) — подходит для балансировки без sticky."
+        )
     ssl_kwargs = resolve_mcp_mtls_uvicorn_kwargs(log)
     scheme = "https" if ssl_kwargs else "http"
     if transport == "streamable-http":

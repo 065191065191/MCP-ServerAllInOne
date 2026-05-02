@@ -5,11 +5,12 @@ services:
     build:
       context: .
       dockerfile: deploy/Dockerfile
-    image: stack-mcp-ui:0.2.8
+    image: stack-mcp-ui:0.2.9
     restart: unless-stopped
     environment:
       STACK_MCP_CONFIG: /etc/stack-mcp/config.yaml
       STACK_MCP_EMBED_MCP: "true"
+      STACK_MCP_STATELESS_HTTP: ${STACK_MCP_STATELESS_HTTP:-}
       STACK_MCP_SSH_HOSTS_FILE: ${STACK_MCP_SSH_HOSTS_FILE:-}
     ports:
       - "127.0.0.1:8888:8888"

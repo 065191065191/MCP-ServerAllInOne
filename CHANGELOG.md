@@ -3,6 +3,22 @@
 Формат основан на принципах [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/).
 Версии соответствуют [семантическому версионированию](https://semver.org/lang/ru/).
 
+## [0.2.9] — 2026-05-02
+
+### Добавлено
+
+- Переменная окружения **`STACK_MCP_STATELESS_HTTP`**: stateless Streamable HTTP в FastMCP (балансировка без sticky, несколько воркеров UI с **`STACK_MCP_EMBED_MCP`**).
+- В **`stack_mcp_status`** возвращается поле **`stateless_http`**.
+- Примеры **`deploy/openshift/`** (Deployment/Service для UI и отдельного `stack-mcp`).
+- Тесты: включение stateless через env (`tests/test_embed_mcp_path.py`).
+
+### Изменено
+
+- **`README.md`**: разделы про два процесса, транспорт и stateless; таблица переменных.
+- **Деплой**: комментарии в Dockerfiles, `deploy/env.production.example`, `docker-compose.prod.yml`, `docker-compose.mcp.yml`, `deploy/config.production.example.yaml`, `deploy/README.md`, `deploy/systemd/README.md`.
+- Предупреждение в **`stack-mcp-ui`**: при **`STACK_MCP_STATELESS_HTTP`** не ругаемся на воркеры >1 так же, как без stateless.
+- Версия пакета и теги образов по умолчанию — **0.2.9**.
+
 ## [0.2.8] — 2026-05-02
 
 ### Исправлено
