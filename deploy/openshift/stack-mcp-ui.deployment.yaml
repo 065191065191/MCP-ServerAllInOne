@@ -41,7 +41,7 @@ spec:
         runAsNonRoot: true
       containers:
         - name: stack-mcp-ui
-          image: stack-mcp-ui:0.3.0
+          image: stack-mcp-ui:0.3.2
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
@@ -54,6 +54,8 @@ spec:
               value: "true"
             - name: STACK_MCP_UI_WORKERS
               value: "1"
+            - name: STACK_MCP_UI_AUDIT_LOG_PATH
+              value: /app/data/logs/ui-audit.log
             # Несколько реплик без sticky / UI_WORKERS>1: раскомментируйте
             # - name: STACK_MCP_STATELESS_HTTP
             #   value: "true"
@@ -64,8 +66,8 @@ spec:
             - name: config
               mountPath: /config
               readOnly: true
-            - name: logs
-              mountPath: /app/logs
+            - name: data
+              mountPath: /app/data
           readinessProbe:
             httpGet:
               path: /ready
@@ -95,7 +97,7 @@ spec:
         - name: config
           configMap:
             name: stack-mcp-config
-        - name: logs
+        - name: data
           emptyDir: {}
 ---
 apiVersion: v1

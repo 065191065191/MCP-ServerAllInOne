@@ -1,11 +1,11 @@
-# Готовый комплект `stack-mcp-server` (релиз 0.3.0)
+# Готовый комплект `stack-mcp-server` (релиз 0.3.2)
 
 ## Что входит
 
 | Путь | Назначение |
 |------|------------|
 | `src/` | Код MCP (HTTP), UI, модули БД/SSH. |
-| `deploy/Dockerfile` | Образ `stack-mcp-ui:0.3.0`: `stack-mcp-ui`, `stack-mcp`. |
+| `deploy/Dockerfile` | Образ `stack-mcp-ui:0.3.2`: `stack-mcp-ui`, `stack-mcp`. |
 | `deploy/docker-compose.prod.yml` | UI + MCP, bind-mount конфига. |
 | `deploy/docker-compose.prod.ssh-extra.yml` | Override: большой список SSH из второго YAML. |
 | `deploy/env.production.example` → `.env` | Переменные окружения. |
@@ -21,11 +21,11 @@
 Из корня репозитория (`E:\git\mcp-server` или клон):
 
 ```bash
-docker build -f deploy/Dockerfile -t stack-mcp-ui:0.3.0 .
-docker save stack-mcp-ui:0.3.0 -o deploy/stack-mcp-ui-0.3.0.tar
+docker build -f deploy/Dockerfile -t stack-mcp-ui:0.3.2 .
+docker save stack-mcp-ui:0.3.2 -o deploy/stack-mcp-ui-0.3.2.tar
 ```
 
-На целевой машине: `docker load -i deploy/stack-mcp-ui-0.3.0.tar`.
+На целевой машине: `docker load -i deploy/stack-mcp-ui-0.3.2.tar`.
 
 ## Сотни SSH-серверов
 

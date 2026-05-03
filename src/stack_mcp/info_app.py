@@ -32,6 +32,7 @@ from stack_mcp.opensearch_tools import connect_opensearch
 from stack_mcp.postgres_tools import postgres_allowlisted_query_catalog
 from stack_mcp.redis_tools import redis_ping, redis_setex
 from stack_mcp.server import build_mcp
+from stack_mcp.tool_audit_http_context import ToolAuditCallerMiddleware
 
 # Безопасный список: только чтение / диагностика + статус (без произвольного SQL и т.д.).
 _INVOKE_ALLOWLIST: dict[str, dict[str, Any] | None] = {
@@ -51,7 +52,7 @@ _INVOKE_ALLOWLIST: dict[str, dict[str, Any] | None] = {
     "ssh_command_policy": {},
 }
 
-app = FastAPI(title="stack-mcp UI", version="0.3.0")
+app = FastAPI(title="stack-mcp UI", version="0.3.2")
 
 _trusted_hosts_raw = (os.environ.get("STACK_MCP_UI_TRUSTED_HOSTS") or "").strip()
 if _trusted_hosts_raw:
@@ -65,6 +66,13 @@ def _embed_stack_mcp_if_enabled() -> None:
     if (os.environ.get("STACK_MCP_EMBED_MCP") or "").strip().lower() not in ("1", "true", "yes"):
         return
     cfg = load_config()
+    os_mod = cfg.modules.opensearch
+    if os_mod.enabled and os_mod.tool_call_audit.enabled:
+        app.add_middleware(
+            ToolAuditCallerMiddleware,
+            audit_cfg=os_mod.tool_call_audit,
+            path_prefix="/mcp",
+        )
     mcp = build_mcp(cfg, streamable_http_path="/")
     app.mount("/mcp", mcp.streamable_http_app())
     logging.getLogger("stack_mcp.ui").info(

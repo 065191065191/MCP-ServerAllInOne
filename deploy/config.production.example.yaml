@@ -46,6 +46,15 @@ modules:
       retrieval_size_cap: 12
       allow_delete_by_id: false
       auto_create_index: false
+    # Журнал вызовов MCP tools (см. docs/TOOL_CALL_AUDIT.md). STACK_MCP_AUDIT_INSTANCE_ID — реплика;
+    # caller_id: прокси ставит caller_http_header, иначе STACK_MCP_AUDIT_CALLER_ID / default_caller_id.
+    # tool_call_audit:
+    #   enabled: true
+    #   index: stack-mcp-tool-audit-prod
+    #   caller_http_header: X-Audit-Caller
+    #   log_http_client_ip: false
+    #   auto_create_index: true
+    #   exclude_tools: [stack_mcp_status]
 
   prometheus:
     enabled: true

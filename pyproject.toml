@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "stack-mcp-server"
-version = "0.3.0"
+version = "0.3.2"
 description = "MCP по HTTP: модули данных (OpenSearch, Kafka, Postgres, Redis, Prometheus, SSH, почта)"
 readme = "README.md"
 authors = [{ name = "Gos Stepan Ulievich" }]

@@ -118,6 +118,45 @@ class OpenSearchSearchAuditLogConfig(BaseModel):
         return self
 
 
+class OpenSearchToolCallAuditConfig(BaseModel):
+    """Журнал вызовов MCP tools в OpenSearch: аргументы, ответ MCP, классификация, длительность."""
+
+    enabled: bool = False
+    index: str = "stack-mcp-tool-audit"
+    # Подпись экземпляра в документе; приоритет у переменной окружения STACK_MCP_AUDIT_INSTANCE_ID.
+    instance_id: str = ""
+    # Кто вызвал tool (для HTTP см. caller_http_header; иначе STACK_MCP_AUDIT_CALLER_ID или default_caller_id).
+    default_caller_id: str = ""
+    # Имя HTTP-заголовка с идентификатором клиента (напр. X-Audit-Caller). Задаётся прокси или клиентом.
+    caller_http_header: str | None = None
+    # Писать в индекс TCP-адрес клиента из ASGI (за reverse proxy может быть IP прокси — см. PROXY protocol / X-Forwarded-For вне scope MCP).
+    log_http_client_ip: bool = False
+    # Лимиты усечения только на стороне MCP (защита от случайно гигантских тел); OpenSearch обычно выдерживает больше.
+    max_arguments_json_chars: int = 1_000_000
+    max_result_chars: int = 5_000_000
+    auto_create_index: bool = True
+    exclude_tools: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _tool_audit_index_ok(self) -> Self:
+        if not self.enabled:
+            return self
+        idx = self.index.strip()
+        if not idx or len(idx) > 255:
+            raise ValueError(
+                "opensearch.tool_call_audit: при enabled=true задайте непустой index (до 255 символов)"
+            )
+        if any(ch in idx for ch in ("*", "?", " ", ",")):
+            raise ValueError(
+                "opensearch.tool_call_audit.index: недопустимы символы *, ?, пробел, запятая"
+            )
+        if self.max_arguments_json_chars < 500 or self.max_arguments_json_chars > 10_000_000:
+            raise ValueError("opensearch.tool_call_audit.max_arguments_json_chars: допустимо 500..10000000")
+        if self.max_result_chars < 1000 or self.max_result_chars > 20_000_000:
+            raise ValueError("opensearch.tool_call_audit.max_result_chars: допустимо 1000..20000000")
+        return self
+
+
 class OpenSearchModuleConfig(ModuleClientMtlsMixin):
     enabled: bool = False
     hosts: list[str] = Field(default_factory=lambda: ["https://localhost:9200"])
@@ -132,11 +171,18 @@ class OpenSearchModuleConfig(ModuleClientMtlsMixin):
     allow_write: bool = False
     rag: OpenSearchRagConfig = Field(default_factory=OpenSearchRagConfig)
     search_audit_log: OpenSearchSearchAuditLogConfig = Field(default_factory=OpenSearchSearchAuditLogConfig)
+    tool_call_audit: OpenSearchToolCallAuditConfig = Field(default_factory=OpenSearchToolCallAuditConfig)
 
     @model_validator(mode="after")
     def _rag_requires_opensearch(self) -> Self:
         if self.rag.enabled and not self.enabled:
             raise ValueError("opensearch.rag.enabled requires opensearch.enabled")
+        return self
+
+    @model_validator(mode="after")
+    def _tool_audit_requires_opensearch(self) -> Self:
+        if self.tool_call_audit.enabled and not self.enabled:
+            raise ValueError("opensearch.tool_call_audit.enabled requires opensearch.enabled")
         return self
 
 

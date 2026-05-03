@@ -104,6 +104,9 @@
 
 ## OpenSearch (`modules.opensearch`)
 
+Опционально **`modules.opensearch.tool_call_audit`**: каждый вызов MCP tool в индекс (10 признаков, **`caller_id`** / опционально IP, аргументы и ответ с лимитами, `duration_ms`, ошибка). Кто вызвал: заголовок **`caller_http_header`**, либо **`STACK_MCP_AUDIT_CALLER_ID`**, либо **`default_caller_id`**. Подробности: **[`docs/TOOL_CALL_AUDIT.md`](TOOL_CALL_AUDIT.md)**.
+
+
 Аутентификация: `username` + `password` в YAML или, если задано `password_env`, пароль только из `os.environ[password_env]`.
 
 | Tool | Назначение |

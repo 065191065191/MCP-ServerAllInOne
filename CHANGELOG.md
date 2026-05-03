@@ -3,6 +3,29 @@
 Формат основан на принципах [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/).
 Версии соответствуют [семантическому версионированию](https://semver.org/lang/ru/).
 
+## [0.3.2] — 2026-05-02
+
+### Добавлено
+
+- **`docs/PRODUCT_OVERVIEW.md`**: обзор продукта «одним слайдом» — диаграмма Mermaid, таблица модулей (входы, действия, куда пишет), ссылки на детальную документацию.
+
+### Изменено
+
+- Версия пакета и теги образов по умолчанию — **0.3.2** (синхронизация `pyproject.toml`, Docker, OpenShift, `deploy/*`, README).
+
+## [0.3.1] — 2026-05-03
+
+### Добавлено
+
+- **`modules.opensearch.tool_call_audit`**: запись **каждого вызова MCP tool** в индекс OpenSearch (имя tool, классификация `module` / `category` / `operation_kind`, JSON аргументов, текст ответа с лимитами, `duration_ms`, ошибка). Подкласс **`AuditedFastMCP`**, переменная **`STACK_MCP_AUDIT_INSTANCE_ID`**, поле **`opensearch_tool_call_audit`** в **`stack_mcp_status`**.
+- Аудит: поля **`caller_id`**, **`caller_client_ip`** (`schema_version` **3**), конфиг **`caller_http_header`**, **`default_caller_id`**, **`log_http_client_ip`**, env **`STACK_MCP_AUDIT_CALLER_ID`**; ASGI-middleware для HTTP MCP (встроенный UI и отдельный сервер).
+- Тесты: `tests/test_tool_audit.py`.
+
+### Изменено
+
+- Версия пакета и теги образов по умолчанию — **0.3.1**.
+- Docker: каталог данных приложения **`/app/data`** (volume в compose), **`BASE_IMAGE`** + установка **curl** через **apt-get** / **microdnf** / **dnf**; UI audit log по умолчанию в прод-compose: **`/app/data/logs/ui-audit.log`**.
+
 ## [0.3.0] — 2026-05-03
 
 ### Добавлено

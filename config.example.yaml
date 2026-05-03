@@ -48,6 +48,22 @@ modules:
       allow_delete_by_id: false
       auto_create_index: false
       source_tag: stack-mcp-rag
+    # Журнал вызовов MCP tools в OpenSearch (аргументы, ответ, классификация, длительность).
+    # Нужен opensearch.enabled=true. Идентификатор инстанса: STACK_MCP_AUDIT_INSTANCE_ID или instance_id.
+    tool_call_audit:
+      enabled: false
+      index: stack-mcp-tool-audit
+      instance_id: ""
+      # Кто вызвал: HTTP-заголовок caller_http_header → STACK_MCP_AUDIT_CALLER_ID → default_caller_id → unknown
+      default_caller_id: ""
+      caller_http_header: null
+      # true — писать caller_client_ip из сокета ASGI (за L7-прокси часто IP прокси, не конечный клиент)
+      log_http_client_ip: false
+      max_arguments_json_chars: 1000000
+      max_result_chars: 5000000
+      auto_create_index: true
+      exclude_tools: []
+      # Пример шума: exclude_tools: [ "stack_mcp_status" ]
 
   kafka:
     enabled: false

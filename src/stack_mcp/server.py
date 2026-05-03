@@ -20,6 +20,7 @@ from stack_mcp import (
     redis_tools,
     ssh_tools,
 )
+from stack_mcp.audited_fastmcp import AuditedFastMCP
 from stack_mcp.backend_tls import resolve_client_mtls
 from stack_mcp.config import (
     AppConfig,
@@ -33,6 +34,7 @@ from stack_mcp.config import (
     load_config,
 )
 from stack_mcp.mtls import resolve_mcp_mtls_uvicorn_kwargs
+from stack_mcp.tool_audit_http_context import ToolAuditCallerMiddleware
 
 
 def _env_truthy(name: str) -> bool:
@@ -449,7 +451,10 @@ def build_mcp(
         _fm_kw["streamable_http_path"] = streamable_http_path
     if _env_truthy("STACK_MCP_STATELESS_HTTP"):
         _fm_kw["stateless_http"] = True
-    mcp = FastMCP(**_fm_kw)
+    if app.modules.opensearch.enabled and app.modules.opensearch.tool_call_audit.enabled:
+        mcp = AuditedFastMCP(**_fm_kw, app_config=app)
+    else:
+        mcp = FastMCP(**_fm_kw)
 
     @mcp.tool()
     def stack_mcp_status() -> str:
@@ -469,6 +474,9 @@ def build_mcp(
                 "mail": app.modules.mail.enabled,
                 "opensearch": app.modules.opensearch.enabled,
                 "opensearch_rag": app.modules.opensearch.enabled and app.modules.opensearch.rag.enabled,
+                "opensearch_tool_call_audit": (
+                    app.modules.opensearch.enabled and app.modules.opensearch.tool_call_audit.enabled
+                ),
                 "ssh": app.modules.ssh.enabled,
                 "mcp_http_mtls": resolve_mcp_mtls_uvicorn_kwargs() is not None,
                 "backend_mtls": {
@@ -518,12 +526,20 @@ async def _run_mcp_http_server(
     mcp: FastMCP,
     transport: str,
     ssl_kwargs: dict[str, Any] | None,
+    app_cfg: AppConfig,
 ) -> None:
     """То же, что FastMCP.run_sse_async / run_streamable_http_async, но с опциональным mTLS для uvicorn."""
     if transport == "sse":
         starlette_app = mcp.sse_app(None)
     else:
         starlette_app = mcp.streamable_http_app()
+    os_mod = app_cfg.modules.opensearch
+    if os_mod.enabled and os_mod.tool_call_audit.enabled:
+        starlette_app = ToolAuditCallerMiddleware(
+            starlette_app,
+            audit_cfg=os_mod.tool_call_audit,
+            path_prefix=None,
+        )
     kw: dict[str, Any] = {
         "host": mcp.settings.host,
         "port": mcp.settings.port,
@@ -574,7 +590,7 @@ def main() -> None:
         log.info("MCP SSE on %s://%s:%s%s", scheme, host, port, mcp.settings.sse_path)
     if ssl_kwargs:
         log.info("mTLS: клиентские сертификаты обязательны (STACK_MCP_MTLS_* + ssl.CERT_REQUIRED).")
-    anyio.run(_run_mcp_http_server, mcp, transport, ssl_kwargs)
+    anyio.run(_run_mcp_http_server, mcp, transport, ssl_kwargs, cfg)
 
 
 if __name__ == "__main__":
