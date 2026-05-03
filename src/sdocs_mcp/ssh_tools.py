@@ -8,7 +8,7 @@ from typing import Any
 
 import paramiko
 
-from stack_mcp.config import SshHostEntry, SshModuleConfig
+from sdocs_mcp.config import SshHostEntry, SshModuleConfig
 
 # Встроенный слой (~«+20%» к denylist): не песочница, но отсекает частые опасные однострочники.
 _BUILTIN_SAFETY: list[tuple[re.Pattern[str], str]] = [

@@ -1,5 +1,5 @@
 # Конфиг для локального запуска MCP / UI против docker-compose (порты на localhost).
-# export STACK_MCP_CONFIG="$PWD/config.docker.yaml"
+# export SDOCS_MCP_CONFIG="$PWD/config.docker.yaml"
 
 modules:
   opensearch:
@@ -94,7 +94,7 @@ modules:
     imap_ssl: true
     imap_username: ""
     imap_username_env: null
-    imap_password_env: STACK_MCP_MAIL_IMAP_PASSWORD
+    imap_password_env: SDOCS_MCP_MAIL_IMAP_PASSWORD
     default_mailbox: INBOX
     default_from_env: null
     list_mailboxes_max: 200

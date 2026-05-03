@@ -17,7 +17,7 @@
 
 **Минимум для Docker-эксплуатации (рекомендуется в контуре B):**
 
-- Файл `**stack-mcp-ui-0.3.2.tar`** (`docker save` готового образа).
+- Файл `**sdocs-mcp-ui-0.3.2.tar`** (`docker save` готового образа).
 - Ваш `**config.yaml**` (из `config.example.yaml` / `deploy/config.production.example.yaml`) и при необходимости `**deploy/.env**`.
 - Docker (или containerd + nerdctl / podman по политике ИБ).
 
@@ -57,7 +57,7 @@ docker build \
   --build-arg HTTPS_PROXY="$HTTPS_PROXY" \
   --build-arg NO_PROXY="$NO_PROXY" \
   -f deploy/Dockerfile \
-  -t stack-mcp-ui:0.3.2 .
+  -t sdocs-mcp-ui:0.3.2 .
 ```
 
 Другой базовый образ (внутренний зеркальный реестр):
@@ -69,13 +69,13 @@ docker build \
   --build-arg NO_PROXY="$NO_PROXY" \
   --build-arg BASE_IMAGE=registry.example.corp/python:3.12-slim \
   -f deploy/Dockerfile \
-  -t stack-mcp-ui:0.3.2 .
+  -t sdocs-mcp-ui:0.3.2 .
 ```
 
 Сохраните образ для переноса в более жёсткий контур:
 
 ```bash
-docker save stack-mcp-ui:0.3.2 -o stack-mcp-ui-0.3.2.tar
+docker save sdocs-mcp-ui:0.3.2 -o sdocs-mcp-ui-0.3.2.tar
 ```
 
 ### 2.1.1. Прокси с логином и паролем (секреты при сборке)
@@ -96,13 +96,13 @@ docker save stack-mcp-ui:0.3.2 -o stack-mcp-ui-0.3.2.tar
    DOCKER_BUILDKIT=1 docker build \
      --secret id=build_proxy,src=build-proxy.url \
      -f deploy/Dockerfile.buildkit-proxy \
-     -t stack-mcp-ui:0.3.2 .
+     -t sdocs-mcp-ui:0.3.2 .
   ```
    Параллельно **daemon** Docker по-прежнему должен уметь тянуть **базовый образ** (`FROM`): при необходимости настройте прокси для daemon (как в §2.1) **или** выполните `docker pull` / `docker load` базы заранее с той же машины, где уже есть образ.
 3. **Docker Compose** (фрагмент, Compose v2 с BuildKit):
   ```yaml
    services:
-     stack-mcp-ui:
+     sdocs-mcp-ui:
        build:
          context: ..
          dockerfile: deploy/Dockerfile.buildkit-proxy
@@ -158,10 +158,10 @@ environment:
 
 1. Соберите образ: см. раздел 2 или `[deploy/README.md](../deploy/README.md)`.
 2. Выполните:
-  `docker save stack-mcp-ui:0.3.2 -o stack-mcp-ui-0.3.2.tar`
+  `docker save sdocs-mcp-ui:0.3.2 -o sdocs-mcp-ui-0.3.2.tar`
 3. Перенесите `**tar`**, конфиги и `.env` на изолированную площадку.
 4. На целевой машине:
-  `docker load -i stack-mcp-ui-0.3.2.tar`
+  `docker load -i sdocs-mcp-ui-0.3.2.tar`
 5. Запуск: как в `[deploy/README.md](../deploy/README.md)` (`docker run` или `docker compose -f deploy/docker-compose.prod.yml`).
 
 Интернет и прокси на площадке **не нужны**.
@@ -193,7 +193,7 @@ pip wheel --wheel-dir wheelhouse -e ".[dev]"
 # или: . .venv/bin/activate && pip install --no-index --find-links=wheelhouse -e .
 ```
 
-Запуск: `**stack-mcp**` / `**stack-mcp-ui**`, конфиг через `**STACK_MCP_CONFIG**`.
+Запуск: `**sdocs-mcp**` / `**sdocs-mcp-ui**`, конфиг через `**SDOCS_MCP_CONFIG**`.
 
 ---
 
@@ -221,6 +221,6 @@ pip wheel --wheel-dir wheelhouse -e ".[dev]"
 
 - `docker run ...` или compose: `**curl -fsS http://127.0.0.1:8888/health`** (порт из вашего bind).
 - MCP: `**curl**` к `**/mcp**` по вашему транспорту или проверка из IDE.
-- Логи контейнера без ошибок импорта и подключения к `**STACK_MCP_CONFIG**`.
+- Логи контейнера без ошибок импорта и подключения к `**SDOCS_MCP_CONFIG**`.
 
 Детали прод-деплоя: `**[deploy/README.md](../deploy/README.md)**`, возможности модулей: `**[CAPABILITIES.md](CAPABILITIES.md)**`.

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from stack_mcp.config import OpenSearchModuleConfig, OpenSearchRagConfig
+from sdocs_mcp.config import OpenSearchModuleConfig, OpenSearchRagConfig
 
 
 def test_rag_allowlist_required_when_enabled() -> None:

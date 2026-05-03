@@ -3,15 +3,15 @@
 #   docker compose -f deploy/docker-compose.prod.yml -f deploy/docker-compose.prod.ssh-extra.yml --env-file deploy/.env up -d
 #
 # В deploy/.env задайте:
-#   STACK_MCP_SSH_HOSTS_HOST_PATH=/etc/stack-mcp/ssh_hosts_generated.yaml
-#   STACK_MCP_SSH_HOSTS_FILE=/etc/stack-mcp/ssh_hosts_extra.yaml
+#   SDOCS_MCP_SSH_HOSTS_HOST_PATH=/etc/sdocs-mcp/ssh_hosts_generated.yaml
+#   SDOCS_MCP_SSH_HOSTS_FILE=/etc/sdocs-mcp/ssh_hosts_extra.yaml
 
 services:
-  stack-mcp-mcp:
+  sdocs-mcp-mcp:
     environment:
-      STACK_MCP_SSH_HOSTS_FILE: /etc/stack-mcp/ssh_hosts_extra.yaml
+      SDOCS_MCP_SSH_HOSTS_FILE: /etc/sdocs-mcp/ssh_hosts_extra.yaml
     volumes:
       - type: bind
-        source: ${STACK_MCP_SSH_HOSTS_HOST_PATH:?path to generated ssh hosts yaml on host}
-        target: /etc/stack-mcp/ssh_hosts_extra.yaml
+        source: ${SDOCS_MCP_SSH_HOSTS_HOST_PATH:?path to generated ssh hosts yaml on host}
+        target: /etc/sdocs-mcp/ssh_hosts_extra.yaml
         read_only: true

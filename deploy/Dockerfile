@@ -1,5 +1,5 @@
 # Образ: веб UI + встроенный MCP Streamable HTTP на одном порту (8888, путь /mcp).
-# Сборка: docker build -f deploy/Dockerfile -t stack-mcp-ui:0.3.2 .
+# Сборка: docker build -f deploy/Dockerfile -t sdocs-mcp-ui:0.3.2 .
 #
 # Другой базовый образ (например UBI/RHEL с Python): передайте --build-arg BASE_IMAGE=...
 # Установка curl: apt-get | microdnf | dnf в зависимости от базы.
@@ -23,12 +23,12 @@ RUN set -eux; \
     fi
 
 RUN set -eux; \
-    if id -u stackmcp >/dev/null 2>&1; then \
+    if id -u sdocsmcp >/dev/null 2>&1; then \
       :; \
     else \
       NOLOGIN="$(command -v nologin || true)"; \
       if [ -z "$NOLOGIN" ]; then NOLOGIN=/bin/false; fi; \
-      useradd --system --uid 10001 --home-dir /app --create-home --shell "$NOLOGIN" stackmcp; \
+      useradd --system --uid 10001 --home-dir /app --create-home --shell "$NOLOGIN" sdocsmcp; \
     fi
 
 WORKDIR /app
@@ -38,18 +38,18 @@ COPY src ./src
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir . \
     && mkdir -p /app/data/logs \
-    && chown -R stackmcp:stackmcp /app
+    && chown -R sdocsmcp:sdocsmcp /app
 
-USER stackmcp
-# Опционально при запуске контейнера: STACK_MCP_STATELESS_HTTP=true — stateless Streamable HTTP (см. README).
+USER sdocsmcp
+# Опционально при запуске контейнера: SDOCS_MCP_STATELESS_HTTP=true — stateless Streamable HTTP (см. README).
 ENV PYTHONUNBUFFERED=1 \
-    STACK_MCP_UI_HOST=0.0.0.0 \
-    STACK_MCP_UI_PORT=8888 \
-    STACK_MCP_EMBED_MCP=true
+    SDOCS_MCP_UI_HOST=0.0.0.0 \
+    SDOCS_MCP_UI_PORT=8888 \
+    SDOCS_MCP_EMBED_MCP=true
 
 EXPOSE 8888
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
     CMD curl -fsS http://127.0.0.1:8888/health || exit 1
 
-CMD ["stack-mcp-ui"]
+CMD ["sdocs-mcp-ui"]

@@ -6,8 +6,8 @@ import ssl
 from typing import Any
 from urllib.parse import unquote, urlparse
 
-from stack_mcp.backend_tls import resolve_client_mtls
-from stack_mcp.config import RedisModuleConfig
+from sdocs_mcp.backend_tls import resolve_client_mtls
+from sdocs_mcp.config import RedisModuleConfig
 
 
 class RedisRespError(RuntimeError):

@@ -2,7 +2,7 @@
 
 ## Зачем усечение `arguments_json` / `result_text`
 
-Это **не** лимит самого OpenSearch: кластер по умолчанию принимает большие HTTP-тела (ограничение задаётся `http.max_content_length` и т.п.). Усечение делается **в приложении stack-mcp**, чтобы:
+Это **не** лимит самого OpenSearch: кластер по умолчанию принимает большие HTTP-тела (ограничение задаётся `http.max_content_length` и т.п.). Усечение делается **в приложении sdocs-mcp**, чтобы:
 
 - не отправить по сети десятки мегабайт из одного ответа tool по ошибке;
 - предсказуемо держать размер документа.
@@ -17,14 +17,14 @@
 
 Протокол MCP **не передаёт** учётную запись конечного пользователя. Идентификатор вызывающей стороны собирается так:
 
-1. **HTTP (встроенный MCP на `/mcp` или отдельный `stack-mcp` на streamable-http/SSE):** если в конфиге задано **`tool_call_audit.caller_http_header`** (например `X-Audit-Caller`), берётся значение этого заголовка. Его должен проставить **reverse proxy** (после OIDC/LDAP) или клиент, если политика это допускает.
-2. Иначе **`STACK_MCP_AUDIT_CALLER_ID`** в окружении процесса.
+1. **HTTP (встроенный MCP на `/mcp` или отдельный `sdocs-mcp` на streamable-http/SSE):** если в конфиге задано **`tool_call_audit.caller_http_header`** (например `X-Audit-Caller`), берётся значение этого заголовка. Его должен проставить **reverse proxy** (после OIDC/LDAP) или клиент, если политика это допускает.
+2. Иначе **`SDOCS_MCP_AUDIT_CALLER_ID`** в окружении процесса.
 3. Иначе **`tool_call_audit.default_caller_id`** из YAML.
 4. Иначе в документ пишется **`unknown`**.
 
 Опционально **`tool_call_audit.log_http_client_ip: true`** — в поле **`caller_client_ip`** попадает адрес из ASGI `scope["client"]` (часто это IP **последнего** TCP-узла, т.е. прокси; реальный клиент обычно в `X-Forwarded-For` на прокси — MCP его сам не разбирает).
 
-**stdio:** middleware нет — используются только пункты 2–4 (типично один процесс MCP на пользователя/воркспейс и свой `STACK_MCP_AUDIT_CALLER_ID` при запуске).
+**stdio:** middleware нет — используются только пункты 2–4 (типично один процесс MCP на пользователя/воркспейс и свой `SDOCS_MCP_AUDIT_CALLER_ID` при запуске).
 
 ---
 
@@ -36,7 +36,7 @@
 | 1   | `module`             | Семья бэкенда: `postgres`, `redis`, `kafka`, `mail`, `prometheus`, `opensearch`, `ssh`, `core`, `other`. |
 | 2   | `category`           | `meta` (статус), `data_plane` (обычные tools), `rag` (имя содержит `opensearch_rag`).                    |
 | 3   | `operation_kind`     | `read` | `write` | `admin` (по белым спискам имён tools в коде).                                         |
-| 4   | `tool_family`        | Первый сегмент имени до `_` (`postgres` из `postgres_ping`) или `meta` для `stack_mcp_status`.           |
+| 4   | `tool_family`        | Первый сегмент имени до `_` (`postgres` из `postgres_ping`) или `meta` для `sdocs_mcp_status`.           |
 | 5   | `risk_tier`          | `low` | `medium` | `high` — эвристика: SSH, удаление индекса, Kafka produce/admin, SMTP → выше риск.     |
 | 6   | `api_surface`        | Сейчас всегда `mcp_tool` (зарезервировано под другие входы).                                             |
 | 7   | `rag_lane`           | `true`, если в имени tool есть подстрока `opensearch_rag`.                                               |

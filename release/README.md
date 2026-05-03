@@ -4,9 +4,9 @@
 
 | Файл | Описание |
 |------|----------|
-| `stack-mcp-server-full-*.tar.gz` | Полный проект (без `.venv`, кэшей, `.git`) |
-| `stack-mcp-server-runtime-*.tar.gz` | Минимум для продакшена **+ каталог `wheels/`** (можно `./install.sh --offline ./wheels`) |
-| `stack-mcp-server-runtime-online-*.tar.gz` | Тот же минимум **без** заранее скачанных пакетов — только `./install.sh` с доступом к **PyPI** |
+| `sdocs-mcp-full-*.tar.gz` | Полный проект (без `.venv`, кэшей, `.git`) |
+| `sdocs-mcp-runtime-*.tar.gz` | Минимум для продакшена **+ каталог `wheels/`** (можно `./install.sh --offline ./wheels`) |
+| `sdocs-mcp-runtime-online-*.tar.gz` | Тот же минимум **без** заранее скачанных пакетов — только `./install.sh` с доступом к **PyPI** |
 
 **Создать архивы**
 

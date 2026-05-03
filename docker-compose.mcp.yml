@@ -1,18 +1,18 @@
 ﻿# Краткий пример: один порт 8888 — UI + MCP на /mcp (как в deploy/docker-compose.prod.yml).
 
 services:
-  stack-mcp:
+  sdocs-mcp:
     build:
       context: .
       dockerfile: deploy/Dockerfile
-    image: stack-mcp-ui:0.3.2
+    image: sdocs-mcp-ui:0.3.2
     restart: unless-stopped
     environment:
-      STACK_MCP_CONFIG: /etc/stack-mcp/config.yaml
-      STACK_MCP_EMBED_MCP: "true"
-      STACK_MCP_STATELESS_HTTP: ${STACK_MCP_STATELESS_HTTP:-}
-      STACK_MCP_SSH_HOSTS_FILE: ${STACK_MCP_SSH_HOSTS_FILE:-}
+      SDOCS_MCP_CONFIG: /etc/sdocs-mcp/config.yaml
+      SDOCS_MCP_EMBED_MCP: "true"
+      SDOCS_MCP_STATELESS_HTTP: ${SDOCS_MCP_STATELESS_HTTP:-}
+      SDOCS_MCP_SSH_HOSTS_FILE: ${SDOCS_MCP_SSH_HOSTS_FILE:-}
     ports:
       - "127.0.0.1:8888:8888"
     volumes:
-      - ${STACK_MCP_CONFIG_HOST_PATH:?set STACK_MCP_CONFIG_HOST_PATH}:/etc/stack-mcp/config.yaml:ro
+      - ${SDOCS_MCP_CONFIG_HOST_PATH:?set SDOCS_MCP_CONFIG_HOST_PATH}:/etc/sdocs-mcp/config.yaml:ro

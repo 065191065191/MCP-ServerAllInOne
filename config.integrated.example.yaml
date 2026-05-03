@@ -1,6 +1,6 @@
 # Пример «полного» локального стека: RAG в OpenSearch + Kafka + Postgres + Redis.
-# Скопируйте в свой config.yaml или укажите путь через STACK_MCP_CONFIG.
-# Топики Kafka (stack-mcp.events и т.д.) создайте в кластере отдельно, если их ещё нет.
+# Скопируйте в свой config.yaml или укажите путь через SDOCS_MCP_CONFIG.
+# Топики Kafka (sdocs-mcp.events и т.д.) создайте в кластере отдельно, если их ещё нет.
 
 modules:
   # Общая память агента (RAG) в OpenSearch.
@@ -19,7 +19,7 @@ modules:
     rag:
       enabled: true
       index_allowlist:
-        - stack-mcp-agent-memory
+        - sdocs-mcp-agent-memory
       max_text_bytes: 100000
       max_title_bytes: 2048
       max_metadata_json_bytes: 8192
@@ -28,7 +28,7 @@ modules:
       retrieval_size_cap: 12
       allow_delete_by_id: false
       auto_create_index: true
-      source_tag: stack-mcp-rag
+      source_tag: sdocs-mcp-rag
 
   # Шина событий для асинхронных сценариев.
   kafka:
@@ -40,8 +40,8 @@ modules:
     sasl_username: null
     sasl_password: null
     topic_allowlist:
-      - stack-mcp.events
-      - stack-mcp.metrics
+      - sdocs-mcp.events
+      - sdocs-mcp.metrics
       - prometheus.metrics
     allow_produce: true
     allow_admin: false
@@ -105,7 +105,7 @@ modules:
     imap_ssl: true
     imap_username: ""
     imap_username_env: null
-    imap_password_env: STACK_MCP_MAIL_IMAP_PASSWORD
+    imap_password_env: SDOCS_MCP_MAIL_IMAP_PASSWORD
     default_mailbox: INBOX
     default_from_env: null
     list_mailboxes_max: 200

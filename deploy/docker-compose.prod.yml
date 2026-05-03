@@ -1,32 +1,32 @@
-# Прод: один порт — UI/метрики + MCP Streamable HTTP на http://<host>:8888/mcp (STACK_MCP_EMBED_MCP=true).
+# Прод: один порт — UI/метрики + MCP Streamable HTTP на http://<host>:8888/mcp (SDOCS_MCP_EMBED_MCP=true).
 # Использование:
 #   cp deploy/env.production.example deploy/.env
 #   # отредактировать .env и положить config.production.yaml рядом или указать путь в env
 #   docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env up -d
 
 services:
-  stack-mcp-ui:
+  sdocs-mcp-ui:
     build:
       context: ..
       dockerfile: deploy/Dockerfile
-    image: stack-mcp-ui:${STACK_MCP_IMAGE_TAG:-0.3.2}
+    image: sdocs-mcp-ui:${SDOCS_MCP_IMAGE_TAG:-0.3.2}
     restart: unless-stopped
     env_file:
       - .env
     environment:
-      STACK_MCP_CONFIG: /etc/stack-mcp/config.yaml
-      STACK_MCP_EMBED_MCP: "true"
-      STACK_MCP_STATELESS_HTTP: ${STACK_MCP_STATELESS_HTTP:-}
+      SDOCS_MCP_CONFIG: /etc/sdocs-mcp/config.yaml
+      SDOCS_MCP_EMBED_MCP: "true"
+      SDOCS_MCP_STATELESS_HTTP: ${SDOCS_MCP_STATELESS_HTTP:-}
       # Логи UI и прочие данные только под /app/data (без записи в /var, /home, /opt)
-      STACK_MCP_UI_AUDIT_LOG_PATH: /app/data/logs/ui-audit.log
+      SDOCS_MCP_UI_AUDIT_LOG_PATH: /app/data/logs/ui-audit.log
     ports:
-      - "${STACK_MCP_UI_BIND:-127.0.0.1}:${STACK_MCP_UI_PORT:-8888}:8888"
+      - "${SDOCS_MCP_UI_BIND:-127.0.0.1}:${SDOCS_MCP_UI_PORT:-8888}:8888"
     volumes:
       - type: bind
-        source: ${STACK_MCP_CONFIG_HOST_PATH:?set STACK_MCP_CONFIG_HOST_PATH to host path of yaml}
-        target: /etc/stack-mcp/config.yaml
+        source: ${SDOCS_MCP_CONFIG_HOST_PATH:?set SDOCS_MCP_CONFIG_HOST_PATH to host path of yaml}
+        target: /etc/sdocs-mcp/config.yaml
         read_only: true
-      - stack-mcp-data:/app/data
+      - sdocs-mcp-data:/app/data
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8888/health"]
       interval: 30s
@@ -35,4 +35,4 @@ services:
       start_period: 20s
 
 volumes:
-  stack-mcp-data:
+  sdocs-mcp-data:

@@ -8,8 +8,8 @@ from typing import Any
 
 from opensearchpy.exceptions import OpenSearchException
 
-from stack_mcp.config import OpenSearchModuleConfig, OpenSearchRagConfig
-from stack_mcp.opensearch_tools import connect_opensearch
+from sdocs_mcp.config import OpenSearchModuleConfig, OpenSearchRagConfig
+from sdocs_mcp.opensearch_tools import connect_opensearch
 
 _DOC_ID_RE = re.compile(r"^[-_a-zA-Z0-9]{1,128}$")
 

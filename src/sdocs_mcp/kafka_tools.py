@@ -7,8 +7,8 @@ from typing import Any
 from kafka import KafkaConsumer, KafkaProducer, TopicPartition
 from kafka.admin import KafkaAdminClient, NewTopic
 
-from stack_mcp.backend_tls import kafka_apply_mtls
-from stack_mcp.config import KafkaModuleConfig
+from sdocs_mcp.backend_tls import kafka_apply_mtls
+from sdocs_mcp.config import KafkaModuleConfig
 
 
 def _base_kafka_connection(cfg: KafkaModuleConfig) -> dict[str, Any]:
@@ -37,7 +37,7 @@ def _consumer_config(cfg: KafkaModuleConfig) -> dict[str, Any]:
         {
             "enable_auto_commit": False,
             "consumer_timeout_ms": max(1000, cfg.consume_timeout_seconds * 1000),
-            "group_id": f"stack-mcp-{uuid.uuid4()}",
+            "group_id": f"sdocs-mcp-{uuid.uuid4()}",
         }
     )
     return conf

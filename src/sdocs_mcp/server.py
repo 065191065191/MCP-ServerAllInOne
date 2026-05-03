@@ -10,7 +10,7 @@ import anyio
 import uvicorn
 from mcp.server.fastmcp import FastMCP
 
-from stack_mcp import (
+from sdocs_mcp import (
     kafka_tools,
     mail_tools,
     opensearch_rag_tools,
@@ -20,9 +20,9 @@ from stack_mcp import (
     redis_tools,
     ssh_tools,
 )
-from stack_mcp.audited_fastmcp import AuditedFastMCP
-from stack_mcp.backend_tls import resolve_client_mtls
-from stack_mcp.config import (
+from sdocs_mcp.audited_fastmcp import AuditedFastMCP
+from sdocs_mcp.backend_tls import resolve_client_mtls
+from sdocs_mcp.config import (
     AppConfig,
     KafkaModuleConfig,
     MailModuleConfig,
@@ -33,8 +33,8 @@ from stack_mcp.config import (
     SshModuleConfig,
     load_config,
 )
-from stack_mcp.mtls import resolve_mcp_mtls_uvicorn_kwargs
-from stack_mcp.tool_audit_http_context import ToolAuditCallerMiddleware
+from sdocs_mcp.mtls import resolve_mcp_mtls_uvicorn_kwargs
+from sdocs_mcp.tool_audit_http_context import ToolAuditCallerMiddleware
 
 
 def _env_truthy(name: str) -> bool:
@@ -442,14 +442,14 @@ def build_mcp(
             "retrieve context with opensearch_rag_search (not unbounded)."
         )
     _fm_kw: dict[str, Any] = {
-        "name": "stack-mcp",
+        "name": "sdocs-mcp",
         "instructions": _instr,
         "host": host,
         "port": port,
     }
     if streamable_http_path is not None:
         _fm_kw["streamable_http_path"] = streamable_http_path
-    if _env_truthy("STACK_MCP_STATELESS_HTTP"):
+    if _env_truthy("SDOCS_MCP_STATELESS_HTTP"):
         _fm_kw["stateless_http"] = True
     if app.modules.opensearch.enabled and app.modules.opensearch.tool_call_audit.enabled:
         mcp = AuditedFastMCP(**_fm_kw, app_config=app)
@@ -457,7 +457,7 @@ def build_mcp(
         mcp = FastMCP(**_fm_kw)
 
     @mcp.tool()
-    def stack_mcp_status() -> str:
+    def sdocs_mcp_status() -> str:
         """Which backends are enabled in config (no credentials)."""
         return json.dumps(
             {
@@ -513,12 +513,12 @@ def build_mcp(
 
 
 _STDIO_DISABLED = (
-    "Транспорт stdio отключён. По умолчанию используется HTTP (STACK_MCP_TRANSPORT=streamable-http). "
-    "Для отладки stdio задайте STACK_MCP_DEV_LOCAL=true."
+    "Транспорт stdio отключён. По умолчанию используется HTTP (SDOCS_MCP_TRANSPORT=streamable-http). "
+    "Для отладки stdio задайте SDOCS_MCP_DEV_LOCAL=true."
 )
 _LOCALHOST_DISABLED = (
-    "Привязка MCP к localhost запрещена (STACK_MCP_HOST=127.0.0.1 / localhost / ::1). "
-    "Слушайте 0.0.0.0 за reverse proxy и firewall или задайте STACK_MCP_DEV_LOCAL=true только для разработки."
+    "Привязка MCP к localhost запрещена (SDOCS_MCP_HOST=127.0.0.1 / localhost / ::1). "
+    "Слушайте 0.0.0.0 за reverse proxy и firewall или задайте SDOCS_MCP_DEV_LOCAL=true только для разработки."
 )
 
 
@@ -551,12 +551,12 @@ async def _run_mcp_http_server(
 
 
 def main() -> None:
-    log = logging.getLogger("stack_mcp")
+    log = logging.getLogger("sdocs_mcp")
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
 
     cfg = load_config()
-    dev_local = os.environ.get("STACK_MCP_DEV_LOCAL", "").strip().lower() in ("1", "true", "yes")
-    transport = (os.environ.get("STACK_MCP_TRANSPORT") or "streamable-http").strip().lower()
+    dev_local = os.environ.get("SDOCS_MCP_DEV_LOCAL", "").strip().lower() in ("1", "true", "yes")
+    transport = (os.environ.get("SDOCS_MCP_TRANSPORT") or "streamable-http").strip().lower()
 
     if transport == "stdio":
         if not dev_local:
@@ -567,19 +567,19 @@ def main() -> None:
         return
 
     if transport not in ("streamable-http", "sse"):
-        log.error("Unknown STACK_MCP_TRANSPORT=%r (use streamable-http, sse, or stdio)", transport)
+        log.error("Unknown SDOCS_MCP_TRANSPORT=%r (use streamable-http, sse, or stdio)", transport)
         sys.exit(2)
 
-    host = (os.environ.get("STACK_MCP_HOST") or "0.0.0.0").strip()
-    port = int(os.environ.get("STACK_MCP_PORT", "8765"))
+    host = (os.environ.get("SDOCS_MCP_HOST") or "0.0.0.0").strip()
+    port = int(os.environ.get("SDOCS_MCP_PORT", "8765"))
     if host in ("127.0.0.1", "localhost", "::1") and not dev_local:
         log.error(_LOCALHOST_DISABLED)
         sys.exit(_LOCALHOST_DISABLED)
 
     mcp = build_mcp(cfg, host=host, port=port)
-    if _env_truthy("STACK_MCP_STATELESS_HTTP"):
+    if _env_truthy("SDOCS_MCP_STATELESS_HTTP"):
         log.info(
-            "MCP Streamable HTTP: stateless mode (STACK_MCP_STATELESS_HTTP) — подходит для балансировки без sticky."
+            "MCP Streamable HTTP: stateless mode (SDOCS_MCP_STATELESS_HTTP) — подходит для балансировки без sticky."
         )
     ssl_kwargs = resolve_mcp_mtls_uvicorn_kwargs(log)
     scheme = "https" if ssl_kwargs else "http"
@@ -589,7 +589,7 @@ def main() -> None:
     else:
         log.info("MCP SSE on %s://%s:%s%s", scheme, host, port, mcp.settings.sse_path)
     if ssl_kwargs:
-        log.info("mTLS: клиентские сертификаты обязательны (STACK_MCP_MTLS_* + ssl.CERT_REQUIRED).")
+        log.info("mTLS: клиентские сертификаты обязательны (SDOCS_MCP_MTLS_* + ssl.CERT_REQUIRED).")
     anyio.run(_run_mcp_http_server, mcp, transport, ssl_kwargs, cfg)
 
 

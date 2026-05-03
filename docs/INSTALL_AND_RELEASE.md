@@ -1,6 +1,6 @@
 # Установка и релизные сборки
 
-Документ описывает установку **stack-mcp-server**, офлайн-режим и **три** готовых **архивных сборки** (`build-release.sh` / `build-release.ps1`).
+Документ описывает установку **sdocs-mcp**, офлайн-режим и **три** готовых **архивных сборки** (`build-release.sh` / `build-release.ps1`).
 
 ## Требования
 
@@ -15,14 +15,14 @@ chmod +x scripts/install.sh
 ./scripts/install.sh
 source .venv/bin/activate
 cp config.example.yaml config.yaml
-export STACK_MCP_CONFIG="$PWD/config.yaml"
-stack-mcp
+export SDOCS_MCP_CONFIG="$PWD/config.yaml"
+sdocs-mcp
 ```
 
 UI (отдельный процесс):
 
 ```bash
-stack-mcp-ui
+sdocs-mcp-ui
 ```
 
 ## Скрипт `scripts/install.sh`
@@ -60,7 +60,7 @@ chmod +x scripts/build-release.sh
 
 В каталоге `**release/**` появятся **три** `.tar.gz` (сами архивы в `.gitignore`, папка и `README` в репозитории):
 
-### 1. Полная сборка (`stack-mcp-server-full-<version>-<stamp>.tar.gz`)
+### 1. Полная сборка (`sdocs-mcp-full-<version>-<stamp>.tar.gz`)
 
 Входит **весь проект**, пригодный для разработки и CI:
 
@@ -69,7 +69,7 @@ chmod +x scripts/build-release.sh
 
 **Не входит:** `.git`, `.venv`, кэши тестов/линтера, `dist/`, `build/`, `release/`, `logs/*.log`.
 
-### 2. Минимальная runtime-сборка (`stack-mcp-server-runtime-<version>-<stamp>.tar.gz`)
+### 2. Минимальная runtime-сборка (`sdocs-mcp-runtime-<version>-<stamp>.tar.gz`)
 
 Только то, что нужно **поставить и запустить** MCP/UI на сервере:
 
@@ -88,7 +88,7 @@ chmod +x scripts/build-release.sh
 
 **Не входит:** тесты, Docker-файлы, CI, демо-compose (их берите из полной сборки при необходимости).
 
-### 3. Runtime-online (`stack-mcp-server-runtime-online-<version>-<stamp>.tar.gz`)
+### 3. Runtime-online (`sdocs-mcp-runtime-online-<version>-<stamp>.tar.gz`)
 
 Тот же состав, что у п. 2, но **без каталога `wheels/`** — никаких заранее скачанных wheel на этапе сборки. Установка только `**./install.sh**` при доступе к **PyPI**. Размер архива намного меньше.
 
@@ -96,14 +96,14 @@ chmod +x scripts/build-release.sh
 
 ```bash
 # с wheels (офлайн по желанию)
-tar -xzf stack-mcp-server-runtime-*.tar.gz
-cd stack-mcp-server-runtime-*
+tar -xzf sdocs-mcp-runtime-*.tar.gz
+cd sdocs-mcp-runtime-*
 ./install.sh
 # ./install.sh --offline ./wheels
 
 # без wheels — только онлайн
-tar -xzf stack-mcp-server-runtime-online-*.tar.gz
-cd stack-mcp-server-runtime-online-*
+tar -xzf sdocs-mcp-runtime-online-*.tar.gz
+cd sdocs-mcp-runtime-online-*
 ./install.sh
 
 source .venv/bin/activate
@@ -112,7 +112,7 @@ source .venv/bin/activate
 ## Проверка после установки
 
 ```bash
-python -m stack_mcp --help
+python -m sdocs_mcp --help
 # тесты — только в полной сборке:
 # pip install -e ".[dev]" && pytest
 ```

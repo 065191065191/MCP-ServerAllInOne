@@ -6,9 +6,9 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
 
-from stack_mcp.config import OpenSearchToolCallAuditConfig
+from sdocs_mcp.config import OpenSearchToolCallAuditConfig
 
-_var: ContextVar[_HttpCallerHints | None] = ContextVar("stack_mcp_tool_audit_http_hints", default=None)
+_var: ContextVar[_HttpCallerHints | None] = ContextVar("sdocs_mcp_tool_audit_http_hints", default=None)
 
 
 @dataclass(frozen=True, slots=True)

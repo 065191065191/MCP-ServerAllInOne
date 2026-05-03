@@ -8,7 +8,7 @@
 # 2) Сборка:
 #    DOCKER_BUILDKIT=1 docker build \
 #      --secret id=build_proxy,src=build-proxy.url \
-#      -f deploy/Dockerfile.buildkit-proxy -t stack-mcp-ui:0.3.2 .
+#      -f deploy/Dockerfile.buildkit-proxy -t sdocs-mcp-ui:0.3.2 .
 #
 # Обычный Dockerfile без секретов: deploy/Dockerfile
 
@@ -37,12 +37,12 @@ RUN --mount=type=secret,id=build_proxy \
   fi
 
 RUN set -eux; \
-  if id -u stackmcp >/dev/null 2>&1; then \
+  if id -u sdocsmcp >/dev/null 2>&1; then \
     :; \
   else \
     NOLOGIN="$(command -v nologin || true)"; \
     if [ -z "$NOLOGIN" ]; then NOLOGIN=/bin/false; fi; \
-    useradd --system --uid 10001 --home-dir /app --create-home --shell "$NOLOGIN" stackmcp; \
+    useradd --system --uid 10001 --home-dir /app --create-home --shell "$NOLOGIN" sdocsmcp; \
   fi
 
 WORKDIR /app
@@ -56,17 +56,17 @@ RUN --mount=type=secret,id=build_proxy \
   pip install --no-cache-dir --upgrade pip \
   && pip install --no-cache-dir . \
   && mkdir -p /app/data/logs \
-  && chown -R stackmcp:stackmcp /app
+  && chown -R sdocsmcp:sdocsmcp /app
 
-USER stackmcp
+USER sdocsmcp
 ENV PYTHONUNBUFFERED=1 \
-    STACK_MCP_UI_HOST=0.0.0.0 \
-    STACK_MCP_UI_PORT=8888 \
-    STACK_MCP_EMBED_MCP=true
+    SDOCS_MCP_UI_HOST=0.0.0.0 \
+    SDOCS_MCP_UI_PORT=8888 \
+    SDOCS_MCP_EMBED_MCP=true
 
 EXPOSE 8888
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
     CMD curl -fsS http://127.0.0.1:8888/health || exit 1
 
-CMD ["stack-mcp-ui"]
+CMD ["sdocs-mcp-ui"]

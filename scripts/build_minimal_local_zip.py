@@ -6,7 +6,7 @@ import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / "dist" / "stack-mcp-server-local.zip"
+OUT = ROOT / "dist" / "sdocs-mcp-local.zip"
 
 # Не включаем в минимальный пакет
 SKIP_DIR_NAMES = frozenset(

@@ -5,14 +5,21 @@
 
 ## [Unreleased]
 
+### Изменено
+
+- Проект переименован в **SDocsMCP**: пакет Python `sdocs_mcp`, дистрибутив и CLI `sdocs-mcp` / `sdocs-mcp-ui`, переменные окружения с префиксом **`SDOCS_MCP_`**, systemd/OpenShift-манифесты `sdocs-mcp*`, пользователь ОС/контейнера `sdocsmcp`.
+
 ### Добавлено
 
 - **`docs/OFFLINE_AND_PROXY_INSTALL.md`**: сборка и установка в закрытом контуре, через корпоративный HTTP(S)-прокси, перенос `docker save` / wheelhouse; **`NO_PROXY`** для бэкендов; отдельно — доступ к данным через шлюз в `config.yaml`.
 - **`deploy/Dockerfile.buildkit-proxy`**: пример сборки с **прокси Basic URL** через BuildKit `--secret` (без пароля в слоях образа); §2.1.1 в офлайн-доке; **`build-proxy.url`** в `.gitignore`.
-- **`README.md`**: оглавление, блок «слайд» (`PRODUCT_OVERVIEW` + Canvas), таблица документации, прокси/секреты при `docker build`, упорядоченная структура.
-- **`docs/PRODUCT_OVERVIEW.html`**: автономная витрина для совета / ТОП (браузер, без CDN и интернета), с анимацией цепочки вызова; каноническое имя.
-- **`docs/EXECUTIVE_ONEPAGER.html`**: короткий редирект на **`PRODUCT_OVERVIEW.html`** (закладки под старым именем).
-- **`docs/PRODUCT_OVERVIEW_SPEAKER_NOTES.html`**: личный блокнот докладчика (пути, чеклист, тайминг, Q&amp;A, поля для заметок); витрина для ТОП — **`PRODUCT_OVERVIEW.html`**.
+- **`README.md`**: оглавление, блок «слайд» (`PRODUCT_OVERVIEW` + executive one-pager + Canvas), таблица документации, прокси/секреты при `docker build`, упорядоченная структура.
+- **`docs/EXECUTIVE_ONEPAGER.html`**: автономная визуальная витрина для совета / ТОП (браузер, без внешних картинок; SVG и сценарий на странице).
+- **`docs/EXECUTIVE_ONEPAGER.md`**: текстовый сценарий показа, тайминг и структура того же one-pager.
+
+### Удалено
+
+- **`docs/PRODUCT_OVERVIEW.html`**, **`docs/PRODUCT_OVERVIEW_SPEAKER_NOTES.html`**: дублировали материал; витрина и сценарий сведены в **`EXECUTIVE_ONEPAGER.*`**.
 
 ## [0.3.2] — 2026-05-02
 
@@ -28,8 +35,8 @@
 
 ### Добавлено
 
-- **`modules.opensearch.tool_call_audit`**: запись **каждого вызова MCP tool** в индекс OpenSearch (имя tool, классификация `module` / `category` / `operation_kind`, JSON аргументов, текст ответа с лимитами, `duration_ms`, ошибка). Подкласс **`AuditedFastMCP`**, переменная **`STACK_MCP_AUDIT_INSTANCE_ID`**, поле **`opensearch_tool_call_audit`** в **`stack_mcp_status`**.
-- Аудит: поля **`caller_id`**, **`caller_client_ip`** (`schema_version` **3**), конфиг **`caller_http_header`**, **`default_caller_id`**, **`log_http_client_ip`**, env **`STACK_MCP_AUDIT_CALLER_ID`**; ASGI-middleware для HTTP MCP (встроенный UI и отдельный сервер).
+- **`modules.opensearch.tool_call_audit`**: запись **каждого вызова MCP tool** в индекс OpenSearch (имя tool, классификация `module` / `category` / `operation_kind`, JSON аргументов, текст ответа с лимитами, `duration_ms`, ошибка). Подкласс **`AuditedFastMCP`**, переменная **`SDOCS_MCP_AUDIT_INSTANCE_ID`**, поле **`opensearch_tool_call_audit`** в **`sdocs_mcp_status`**.
+- Аудит: поля **`caller_id`**, **`caller_client_ip`** (`schema_version` **3**), конфиг **`caller_http_header`**, **`default_caller_id`**, **`log_http_client_ip`**, env **`SDOCS_MCP_AUDIT_CALLER_ID`**; ASGI-middleware для HTTP MCP (встроенный UI и отдельный сервер).
 - Тесты: `tests/test_tool_audit.py`.
 
 ### Изменено
@@ -41,14 +48,14 @@
 
 ### Добавлено
 
-- **`stack_mcp.ui_nav`**: единая верхняя навигация веб-UI (инжект в HTML дашборда).
+- **`sdocs_mcp.ui_nav`**: единая верхняя навигация веб-UI (инжект в HTML дашборда).
 - Postgres: ограничение имён БД из DSN — **`allowed_databases`**, **`allowed_database_prefixes`** или **`allowed_database_regex`** (взаимоисключение с префиксами/списком по правилам валидатора).
 - SSH: флаг **`merge_recommended_substring_blocklist`** и рекомендованный набор подстрок; расширен встроенный слой **`_BUILTIN_SAFETY`**.
 - Тесты: политика имён БД Postgres (`tests/test_postgres_database_policy.py`), доработки SSH и allowlist SQL.
 
 ### Удалено
 
-- Встроенная обёртка **`stack-mcp-playwright`** (`playwright_http.py`), зависимость **`mcp-playwright`**, Docker/документация и скрипты vendor Chromium под этот сценарий. Браузерный MCP при необходимости запускайте отдельно ([mcp-playwright](https://github.com/ma-pony/mcp-playwright)).
+- Встроенная обёртка **`sdocs-mcp-playwright`** (`playwright_http.py`), зависимость **`mcp-playwright`**, Docker/документация и скрипты vendor Chromium под этот сценарий. Браузерный MCP при необходимости запускайте отдельно ([mcp-playwright](https://github.com/ma-pony/mcp-playwright)).
 
 ### Изменено
 
@@ -59,16 +66,16 @@
 
 ### Добавлено
 
-- Переменная окружения **`STACK_MCP_STATELESS_HTTP`**: stateless Streamable HTTP в FastMCP (балансировка без sticky, несколько воркеров UI с **`STACK_MCP_EMBED_MCP`**).
-- В **`stack_mcp_status`** возвращается поле **`stateless_http`**.
-- Примеры **`deploy/openshift/`** (Deployment/Service для UI и отдельного `stack-mcp`).
+- Переменная окружения **`SDOCS_MCP_STATELESS_HTTP`**: stateless Streamable HTTP в FastMCP (балансировка без sticky, несколько воркеров UI с **`SDOCS_MCP_EMBED_MCP`**).
+- В **`sdocs_mcp_status`** возвращается поле **`stateless_http`**.
+- Примеры **`deploy/openshift/`** (Deployment/Service для UI и отдельного `sdocs-mcp`).
 - Тесты: включение stateless через env (`tests/test_embed_mcp_path.py`).
 
 ### Изменено
 
 - **`README.md`**: разделы про два процесса, транспорт и stateless; таблица переменных.
 - **Деплой**: комментарии в Dockerfiles, `deploy/env.production.example`, `docker-compose.prod.yml`, `docker-compose.mcp.yml`, `deploy/config.production.example.yaml`, `deploy/README.md`, `deploy/systemd/README.md`.
-- Предупреждение в **`stack-mcp-ui`**: при **`STACK_MCP_STATELESS_HTTP`** не ругаемся на воркеры >1 так же, как без stateless.
+- Предупреждение в **`sdocs-mcp-ui`**: при **`SDOCS_MCP_STATELESS_HTTP`** не ругаемся на воркеры >1 так же, как без stateless.
 - Версия пакета и теги образов по умолчанию — **0.2.9**.
 
 ## [0.2.8] — 2026-05-02
@@ -115,7 +122,7 @@
 
 ### Исправлено
 
-- Устаревшие номера **0.3.0** приведены к линейке релиза: `LABEL` в корневом `Dockerfile`, `image` в `docker-compose.mcp.yml`, тексты и имена архивов в `deploy/BUNDLE.md`. В `docker-compose.mcp.yml` и `BUNDLE.md` имя образа выровнено с прод-сборкой: **`stack-mcp-ui`** (как в `deploy/Dockerfile`).
+- Устаревшие номера **0.3.0** приведены к линейке релиза: `LABEL` в корневом `Dockerfile`, `image` в `docker-compose.mcp.yml`, тексты и имена архивов в `deploy/BUNDLE.md`. В `docker-compose.mcp.yml` и `BUNDLE.md` имя образа выровнено с прод-сборкой: **`sdocs-mcp-ui`** (как в `deploy/Dockerfile`).
 
 ## [0.2.4] — 2026-05-02
 
@@ -166,7 +173,7 @@
 
 - Учёт автора проекта в метаданных пакета (`pyproject.toml`).
 - Файл `CHANGELOG.md` и описание процесса релизов (версии, журнал, коммиты).
-- Синхронизация `stack_mcp.__version__` с версией пакета **0.2.0**.
+- Синхронизация `sdocs_mcp.__version__` с версией пакета **0.2.0**.
 
 ### Прочее
 

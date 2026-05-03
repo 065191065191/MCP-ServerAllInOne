@@ -5,8 +5,8 @@ import json
 import smtplib
 from email.message import EmailMessage
 
-from stack_mcp.config import MailModuleConfig
-from stack_mcp.credentials import env_optional, env_required
+from sdocs_mcp.config import MailModuleConfig
+from sdocs_mcp.credentials import env_optional, env_required
 
 
 def _imap_user(cfg: MailModuleConfig) -> str:

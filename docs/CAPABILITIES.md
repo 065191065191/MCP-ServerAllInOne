@@ -1,8 +1,8 @@
-# Возможности и лимиты
+# Возможности и лимиты (SDocsMCP)
 
 Общие правила:
 
-- Процесс **`stack-mcp`**: транспорт по умолчанию **Streamable HTTP** (`/mcp`, порт **8765**, слушатель **0.0.0.0**). Альтернатива — **SSE**. **stdio** и привязка к localhost без **`STACK_MCP_DEV_LOCAL=true`** отключены (см. README).
+- Процесс **`sdocs-mcp`**: транспорт по умолчанию **Streamable HTTP** (`/mcp`, порт **8765**, слушатель **0.0.0.0**). Альтернатива — **SSE**. **stdio** и привязка к localhost без **`SDOCS_MCP_DEV_LOCAL=true`** отключены (см. README).
 - Секреты: в YAML и/или через имена переменных окружения (`*_env`, `password_env` у OpenSearch и почты); значения секретов в ответы tools не попадают.
 - Каждый бэкенд регистрирует инструменты **только если** `modules.<name>.enabled: true`.
 
@@ -10,7 +10,7 @@
 
 | Tool | Описание |
 |------|----------|
-| `stack_mcp_status` | JSON с флагами включённых модулей. |
+| `sdocs_mcp_status` | JSON с флагами включённых модулей. |
 | `ssh_command_policy` | JSON: политика `ssh_run_command` — `forbidden_substrings`, **`merge_recommended_substring_blocklist`**, `forbidden_regex`, `allow_shell_operators`, `builtin_safety_filter`, лимит длины, правила на shell-операторы и список встроенных regex (`ssh_tools._BUILTIN_SAFETY`), если встроенный фильтр включён. |
 
 ## PostgreSQL (`modules.postgres`)
@@ -104,7 +104,7 @@
 
 ## OpenSearch (`modules.opensearch`)
 
-Опционально **`modules.opensearch.tool_call_audit`**: каждый вызов MCP tool в индекс (10 признаков, **`caller_id`** / опционально IP, аргументы и ответ с лимитами, `duration_ms`, ошибка). Кто вызвал: заголовок **`caller_http_header`**, либо **`STACK_MCP_AUDIT_CALLER_ID`**, либо **`default_caller_id`**. Подробности: **[`docs/TOOL_CALL_AUDIT.md`](TOOL_CALL_AUDIT.md)**.
+Опционально **`modules.opensearch.tool_call_audit`**: каждый вызов MCP tool в индекс (10 признаков, **`caller_id`** / опционально IP, аргументы и ответ с лимитами, `duration_ms`, ошибка). Кто вызвал: заголовок **`caller_http_header`**, либо **`SDOCS_MCP_AUDIT_CALLER_ID`**, либо **`default_caller_id`**. Подробности: **[`TOOL_CALL_AUDIT.md`](TOOL_CALL_AUDIT.md)**.
 
 
 Аутентификация: `username` + `password` в YAML или, если задано `password_env`, пароль только из `os.environ[password_env]`.
@@ -137,20 +137,20 @@
 | `opensearch_rag_search` | Полнотекстовый поиск + highlight; опциональный фильтр `session_id`. |
 | `opensearch_rag_delete_document` | Только если `rag.allow_delete_by_id: true`. |
 
-## Демо UI (`stack-mcp-ui`)
+## Демо UI (`sdocs-mcp-ui`)
 
-Веб-интерфейс для проверки конфигурации и бэкендов (см. `README.md`). Сам протокол MCP в `stack-mcp` — **HTTP** (Streamable HTTP или SSE), не stdio по умолчанию.
+Веб-интерфейс для проверки конфигурации и бэкендов (см. `README.md`). Сам протокол MCP в `sdocs-mcp` — **HTTP** (Streamable HTTP или SSE), не stdio по умолчанию.
 
 | Путь | Назначение |
 |------|------------|
 | `/health` | Liveness: `200` и тело `ok`, без загрузки конфига (Docker/Kubernetes). |
-| `/ready` | Readiness: `200` если `STACK_MCP_CONFIG` указывает на файл и YAML парсится; иначе `503`. |
-| `/` | Главная: флаги всех модулей MCP (как в `stack_mcp_status`), проверки доступности по каждому бэкенду (включая почту и SSH TCP), очередь Kafka, превью `/metrics`, список tools, allowlist-вызовы. |
+| `/ready` | Readiness: `200` если `SDOCS_MCP_CONFIG` указывает на файл и YAML парсится; иначе `503`. |
+| `/` | Главная: флаги всех модулей MCP (как в `sdocs_mcp_status`), проверки доступности по каждому бэкенду (включая почту и SSH TCP), очередь Kafka, превью `/metrics`, список tools, allowlist-вызовы. |
 | `/status-page` | Текст экспозиции Prometheus с `/metrics` (при защите метрик — поле для секрета). |
-| `/api/*` | JSON API: Bearer **опционально** — если задан `STACK_MCP_UI_TOKEN`, без него `401`; иначе запросы принимаются. Rate limit по IP, audit JSONL. |
+| `/api/*` | JSON API: Bearer **опционально** — если задан `SDOCS_MCP_UI_TOKEN`, без него `401`; иначе запросы принимаются. Rate limit по IP, audit JSONL. |
 | `/api/auth-config` | Публично: `ui_bearer_enabled`, `metrics_auth_required` (подсказки для браузера). |
-| `/metrics` | Prometheus text exposition: `stack_mcp_module_up`, задержки проверок, `stack_mcp_kafka_retained_messages*`, счётчики UI и `stack_mcp_metrics_auth_failed_total`. |
+| `/metrics` | Prometheus text exposition: `sdocs_mcp_module_up`, задержки проверок, `sdocs_mcp_kafka_retained_messages*`, счётчики UI и `sdocs_mcp_metrics_auth_failed_total`. |
 
-Защита `/metrics` без IP whitelist: `STACK_MCP_METRICS_TOKEN` (и опционально `STACK_MCP_METRICS_ACCEPT_UI_BEARER`, `STACK_MCP_METRICS_REQUIRE_TOKEN`, лимит `STACK_MCP_METRICS_RATE_LIMIT_RPM`). Подробнее — в `README.md`.
+Защита `/metrics` без IP whitelist: `SDOCS_MCP_METRICS_TOKEN` (и опционально `SDOCS_MCP_METRICS_ACCEPT_UI_BEARER`, `SDOCS_MCP_METRICS_REQUIRE_TOKEN`, лимит `SDOCS_MCP_METRICS_RATE_LIMIT_RPM`). Подробнее — в `README.md`.
 
-Прод: `STACK_MCP_UI_WORKERS`, `STACK_MCP_LOG_LEVEL`, `STACK_MCP_UI_TRUSTED_HOSTS` (список Host через запятую), артефакты в `deploy/`.
+Прод: `SDOCS_MCP_UI_WORKERS`, `SDOCS_MCP_LOG_LEVEL`, `SDOCS_MCP_UI_TRUSTED_HOSTS` (список Host через запятую), артефакты в `deploy/`.

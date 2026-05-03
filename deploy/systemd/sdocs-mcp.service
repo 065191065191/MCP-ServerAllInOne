@@ -1,0 +1,23 @@
+[Unit]
+Description=sdocs-mcp MCP server (Streamable HTTP / SSE)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=sdocsmcp
+Group=sdocsmcp
+WorkingDirectory=/opt/sdocs-mcp
+EnvironmentFile=-/etc/sdocs-mcp/mcp.env
+Environment=SDOCS_MCP_CONFIG=/etc/sdocs-mcp/config.yaml
+Environment=SDOCS_MCP_HOST=0.0.0.0
+Environment=SDOCS_MCP_PORT=8765
+Environment=SDOCS_MCP_TRANSPORT=streamable-http
+ExecStart=/opt/sdocs-mcp/.venv/bin/sdocs-mcp
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

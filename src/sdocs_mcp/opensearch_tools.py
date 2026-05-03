@@ -6,9 +6,9 @@ from typing import Any
 from opensearchpy import OpenSearch
 from opensearchpy.exceptions import OpenSearchException
 
-from stack_mcp.backend_tls import opensearch_client_kwargs
-from stack_mcp.config import OpenSearchModuleConfig
-from stack_mcp.credentials import env_required
+from sdocs_mcp.backend_tls import opensearch_client_kwargs
+from sdocs_mcp.config import OpenSearchModuleConfig
+from sdocs_mcp.credentials import env_required
 
 
 def _client(cfg: OpenSearchModuleConfig) -> OpenSearch:

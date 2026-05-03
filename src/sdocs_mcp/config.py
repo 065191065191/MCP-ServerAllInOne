@@ -8,8 +8,8 @@ from typing import Literal, Self
 import yaml
 from pydantic import BaseModel, Field, model_validator
 
-from stack_mcp.backend_tls import validate_client_mtls_triplet_files
-from stack_mcp.postgres_allowlist_sql import normalize_and_validate_allowlisted_sql
+from sdocs_mcp.backend_tls import validate_client_mtls_triplet_files
+from sdocs_mcp.postgres_allowlist_sql import normalize_and_validate_allowlisted_sql
 
 
 class OpenSearchRagConfig(BaseModel):
@@ -33,7 +33,7 @@ class OpenSearchRagConfig(BaseModel):
     allow_delete_by_id: bool = False
     # Создавать индекс с фиксированным mapping при первом store, если индекса ещё нет.
     auto_create_index: bool = False
-    source_tag: str = "stack-mcp-rag"
+    source_tag: str = "sdocs-mcp-rag"
 
     @model_validator(mode="after")
     def _validate_rag(self) -> Self:
@@ -91,7 +91,7 @@ class OpenSearchSearchAuditLogConfig(BaseModel):
     """Опционально: фиксировать запросы search/count в отдельном индексе для статистики и разборов (несколько MCP — каждый пишет со своим uuid)."""
 
     enabled: bool = False
-    index: str = "stack-mcp-search-audit"
+    index: str = "sdocs-mcp-search-audit"
     max_query_json_chars: int = 8000
     max_hits_preview: int = 5
     max_source_chars_per_hit: int = 2000
@@ -122,10 +122,10 @@ class OpenSearchToolCallAuditConfig(BaseModel):
     """Журнал вызовов MCP tools в OpenSearch: аргументы, ответ MCP, классификация, длительность."""
 
     enabled: bool = False
-    index: str = "stack-mcp-tool-audit"
-    # Подпись экземпляра в документе; приоритет у переменной окружения STACK_MCP_AUDIT_INSTANCE_ID.
+    index: str = "sdocs-mcp-tool-audit"
+    # Подпись экземпляра в документе; приоритет у переменной окружения SDOCS_MCP_AUDIT_INSTANCE_ID.
     instance_id: str = ""
-    # Кто вызвал tool (для HTTP см. caller_http_header; иначе STACK_MCP_AUDIT_CALLER_ID или default_caller_id).
+    # Кто вызвал tool (для HTTP см. caller_http_header; иначе SDOCS_MCP_AUDIT_CALLER_ID или default_caller_id).
     default_caller_id: str = ""
     # Имя HTTP-заголовка с идентификатором клиента (напр. X-Audit-Caller). Задаётся прокси или клиентом.
     caller_http_header: str | None = None
@@ -433,7 +433,7 @@ def _load_yaml(path: Path) -> dict:
 
 
 def _load_ssh_hosts_extra(path: Path) -> list[dict]:
-    """Фрагмент для STACK_MCP_SSH_HOSTS_FILE: список хостов или { hosts: [...] }."""
+    """Фрагмент для SDOCS_MCP_SSH_HOSTS_FILE: список хостов или { hosts: [...] }."""
     if not path.is_file():
         return []
     with path.open("r", encoding="utf-8") as f:
@@ -450,11 +450,11 @@ def _load_ssh_hosts_extra(path: Path) -> list[dict]:
 
 
 def load_config() -> AppConfig:
-    path_env = os.environ.get("STACK_MCP_CONFIG")
+    path_env = os.environ.get("SDOCS_MCP_CONFIG")
     default_path = Path.cwd() / "config.yaml"
     path = Path(path_env) if path_env else default_path
     data = _load_yaml(path) if path.is_file() else {}
-    extra_path = (os.environ.get("STACK_MCP_SSH_HOSTS_FILE") or "").strip()
+    extra_path = (os.environ.get("SDOCS_MCP_SSH_HOSTS_FILE") or "").strip()
     if extra_path:
         extra_hosts = _load_ssh_hosts_extra(Path(extra_path))
         if extra_hosts:

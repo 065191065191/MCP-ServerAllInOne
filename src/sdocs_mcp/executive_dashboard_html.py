@@ -1,6 +1,6 @@
 """Статическая разметка главного дашборда (стиль заказчика); данные — через GET /api/dashboard-stats."""
 
-from stack_mcp.ui_nav import inject_top_nav
+from sdocs_mcp.ui_nav import inject_top_nav
 
 _DASHBOARD_HTML_RAW = """<!DOCTYPE html>
 <html lang="ru">
@@ -10,9 +10,9 @@ _DASHBOARD_HTML_RAW = """<!DOCTYPE html>
   <title>MCP метрики — дашборд</title>
   <style>
 {{TOPNAV_STYLES}}
-    nav.stack-mcp-topnav { border-color: var(--border-light); background: var(--bg-card-light); }
-    nav.stack-mcp-topnav a:not(.is-active) { color: var(--accent-green); }
-    nav.stack-mcp-topnav a.is-active { color: var(--text-primary); }
+    nav.sdocs-mcp-topnav { border-color: var(--border-light); background: var(--bg-card-light); }
+    nav.sdocs-mcp-topnav a:not(.is-active) { color: var(--accent-green); }
+    nav.sdocs-mcp-topnav a.is-active { color: var(--text-primary); }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     :root {
       --bg-primary: #020304;
@@ -138,7 +138,7 @@ _DASHBOARD_HTML_RAW = """<!DOCTYPE html>
   {{TOPNAV}}
   <div class="luxury-header">
     <div class="brand">
-      <h1>MCP Метрики <span>stack-mcp telemetry</span></h1>
+      <h1>SDocsMCP · метрики <span>sdocs-mcp telemetry</span></h1>
       <div style="font-size:13px; margin-top:6px; color: var(--text-muted);">Живые проверки бэкендов и счётчики UI · ROI по методике заказчика (масштаб от периода)</div>
       <p class="src-banner" id="srcNote">Загрузка источников данных…</p>
     </div>
@@ -176,7 +176,7 @@ _DASHBOARD_HTML_RAW = """<!DOCTYPE html>
       <div class="metrics-container">
         <div class="metric-row">
           <div class="metric-item"><div class="metric-number" id="mcpCount">—</div><div class="metric-label">MCP в норме</div><div class="metric-note" id="mcpCountNote">из включённых в конфиге</div></div>
-          <div class="metric-item"><div class="metric-number positive" id="totalCalls">—</div><div class="metric-label">Обращений к API UI</div><div class="metric-note" id="periodNote">stack_mcp_ui_requests_total</div></div>
+          <div class="metric-item"><div class="metric-number positive" id="totalCalls">—</div><div class="metric-label">Обращений к API UI</div><div class="metric-note" id="periodNote">sdocs_mcp_ui_requests_total</div></div>
           <div class="metric-item"><div class="metric-number positive" id="avgUptime">—</div><div class="metric-label">Доля успешных проверок</div><div class="metric-note">enabled-модули, health</div></div>
         </div>
         <div class="metric-row">
@@ -223,7 +223,7 @@ _DASHBOARD_HTML_RAW = """<!DOCTYPE html>
   </div>
 
   <div class="dashboard-footer">
-    <div>2026 · stack-mcp · дашборд</div>
+    <div>2026 · sdocs-mcp · дашборд</div>
     <div class="theme-switch" id="themeToggle" role="button" tabindex="0" aria-label="Тема">
       <span>☀</span>
       <div class="toggle-track"><div class="toggle-thumb"></div></div>
@@ -242,7 +242,7 @@ _DASHBOARD_HTML_RAW = """<!DOCTYPE html>
   const TOGGLE_DELTA = 380;
 
   function authHeader() {
-    const t = (localStorage.getItem('stack_mcp_ui_token') || '').trim();
+    const t = (localStorage.getItem('sdocs_mcp_ui_token') || '').trim();
     return t ? { 'Authorization': 'Bearer ' + t } : {};
   }
 

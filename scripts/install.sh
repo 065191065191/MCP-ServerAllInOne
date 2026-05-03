@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Установка stack-mcp-server в venv (онлайн или из каталога wheels рядом с проектом).
+# Установка sdocs-mcp в venv (онлайн или из каталога wheels рядом с проектом).
 set -euo pipefail
 
 OFFLINE_WHEELS=""
@@ -86,5 +86,5 @@ fi
 
 echo ""
 echo "Готово. Активируйте venv: source $VENV_DIR/bin/activate"
-echo "Конфиг: скопируйте config.example.yaml в config.yaml или задайте STACK_MCP_CONFIG."
-echo "Запуск: stack-mcp  |  stack-mcp-ui"
+echo "Конфиг: скопируйте config.example.yaml в config.yaml или задайте SDOCS_MCP_CONFIG."
+echo "Запуск: sdocs-mcp  |  sdocs-mcp-ui"

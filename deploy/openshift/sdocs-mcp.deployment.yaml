@@ -1,12 +1,12 @@
-# Пример Deployment только для процесса stack-mcp (без UI).
-# Тот же образ, что UI, entrypoint переопределён на stack-mcp.
+# Пример Deployment только для процесса sdocs-mcp (без UI).
+# Тот же образ, что UI, entrypoint переопределён на sdocs-mcp.
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: stack-mcp-config
+  name: sdocs-mcp-config
   labels:
-    app: stack-mcp
+    app: sdocs-mcp
 data:
   config.yaml: |
     modules: {}
@@ -14,41 +14,41 @@ data:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: stack-mcp
+  name: sdocs-mcp
   labels:
-    app: stack-mcp
+    app: sdocs-mcp
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: stack-mcp
+      app: sdocs-mcp
   template:
     metadata:
       labels:
-        app: stack-mcp
+        app: sdocs-mcp
     spec:
       securityContext:
         runAsNonRoot: true
       containers:
-        - name: stack-mcp
-          image: stack-mcp-ui:0.3.2
+        - name: sdocs-mcp
+          image: sdocs-mcp-ui:0.3.2
           imagePullPolicy: IfNotPresent
-          command: ["stack-mcp"]
+          command: ["sdocs-mcp"]
           ports:
             - name: mcp
               containerPort: 8765
               protocol: TCP
           env:
-            - name: STACK_MCP_CONFIG
+            - name: SDOCS_MCP_CONFIG
               value: /config/config.yaml
-            - name: STACK_MCP_HOST
+            - name: SDOCS_MCP_HOST
               value: "0.0.0.0"
-            - name: STACK_MCP_PORT
+            - name: SDOCS_MCP_PORT
               value: "8765"
-            - name: STACK_MCP_TRANSPORT
+            - name: SDOCS_MCP_TRANSPORT
               value: streamable-http
             # Service без sessionAffinity / несколько реплик: раскомментируйте
-            # - name: STACK_MCP_STATELESS_HTTP
+            # - name: SDOCS_MCP_STATELESS_HTTP
             #   value: "true"
           volumeMounts:
             - name: config
@@ -79,17 +79,17 @@ spec:
       volumes:
         - name: config
           configMap:
-            name: stack-mcp-config
+            name: sdocs-mcp-config
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: stack-mcp
+  name: sdocs-mcp
   labels:
-    app: stack-mcp
+    app: sdocs-mcp
 spec:
   selector:
-    app: stack-mcp
+    app: sdocs-mcp
   ports:
     - name: mcp
       port: 8765

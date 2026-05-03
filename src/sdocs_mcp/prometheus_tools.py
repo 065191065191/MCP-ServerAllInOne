@@ -7,8 +7,8 @@ from typing import Any
 
 import httpx
 
-from stack_mcp.backend_tls import prometheus_httpx_verify_and_cert
-from stack_mcp.config import KafkaModuleConfig, PrometheusModuleConfig
+from sdocs_mcp.backend_tls import prometheus_httpx_verify_and_cert
+from sdocs_mcp.config import KafkaModuleConfig, PrometheusModuleConfig
 
 
 def _read_optional_token(cfg: PrometheusModuleConfig) -> str | None:
@@ -205,7 +205,7 @@ def prometheus_export_instant_to_kafka(
 
     payload = json.loads(prometheus_query_instant(prom, query))
     envelope = {
-        "source": "stack-mcp-prometheus",
+        "source": "sdocs-mcp-prometheus",
         "exported_at": time.time(),
         "query": query,
         "prometheus": prom.base_url,
@@ -216,7 +216,7 @@ def prometheus_export_instant_to_kafka(
         raise ValueError(
             f"serialized payload exceeds kafka.produce_max_message_bytes ({kafka.produce_max_message_bytes})"
         )
-    from stack_mcp.kafka_tools import kafka_produce
+    from sdocs_mcp.kafka_tools import kafka_produce
 
     return kafka_produce(
         kafka,

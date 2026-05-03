@@ -3,8 +3,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from stack_mcp.config import RedisModuleConfig
-from stack_mcp.redis_resp import RedisRawClient, connect_redis
+from sdocs_mcp.config import RedisModuleConfig
+from sdocs_mcp.redis_resp import RedisRawClient, connect_redis
 
 _INFO_SECTIONS = ("server", "memory", "stats", "replication", "cpu", "commandstats")
 

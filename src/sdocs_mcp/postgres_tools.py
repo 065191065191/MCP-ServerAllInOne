@@ -9,9 +9,9 @@ from psycopg import sql
 from psycopg.conninfo import conninfo_to_dict
 from psycopg.rows import dict_row
 
-from stack_mcp.backend_tls import make_postgres_conninfo
-from stack_mcp.config import PostgresModuleConfig
-from stack_mcp.postgres_allowlist_sql import normalize_and_validate_allowlisted_sql
+from sdocs_mcp.backend_tls import make_postgres_conninfo
+from sdocs_mcp.config import PostgresModuleConfig
+from sdocs_mcp.postgres_allowlist_sql import normalize_and_validate_allowlisted_sql
 
 _ALLOWLISTED_QUERY_ID = re.compile(r"^[a-zA-Z][-a-zA-Z0-9_]*$")
 

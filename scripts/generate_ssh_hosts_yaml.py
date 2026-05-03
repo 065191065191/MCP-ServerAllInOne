@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Генерация YAML для STACK_MCP_SSH_HOSTS_FILE из CSV (десятки/сотни хостов).
+"""Генерация YAML для SDOCS_MCP_SSH_HOSTS_FILE из CSV (десятки/сотни хостов).
 
 Формат CSV (первая строка — заголовок, UTF-8):
   id,hostname,username[,port][,auth][,private_key_path][,password_env][,description]
@@ -12,7 +12,7 @@
   web-01,10.0.0.1,deploy,22,key,
   legacy-02,10.0.0.2,admin,22,password,SSH_LEGACY_02_PASSWORD
 
-Вывод: YAML со списком хостов (подходит как содержимое файла для STACK_MCP_SSH_HOSTS_FILE).
+Вывод: YAML со списком хостов (подходит как содержимое файла для SDOCS_MCP_SSH_HOSTS_FILE).
 """
 from __future__ import annotations
 
@@ -71,7 +71,7 @@ def row_to_host(r: dict[str, str]) -> dict:
 
 
 def main() -> None:
-    p = argparse.ArgumentParser(description="CSV → YAML для STACK_MCP_SSH_HOSTS_FILE")
+    p = argparse.ArgumentParser(description="CSV → YAML для SDOCS_MCP_SSH_HOSTS_FILE")
     p.add_argument("csv_path", type=Path, help="Путь к .csv")
     p.add_argument(
         "-o",

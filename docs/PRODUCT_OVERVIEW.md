@@ -1,4 +1,4 @@
-# stack-mcp — обзор продукта (один слайд)
+# sdocs-mcp — обзор продукта (один слайд)
 
 Модульный **MCP-сервер** для эксплуатации и диагностики: PostgreSQL, Redis, Kafka, Prometheus, OpenSearch (включая RAG), почта, SSH. Опционально **веб-UI** и встроенный MCP на одном порту.
 
@@ -17,7 +17,7 @@ flowchart TB
   end
 
   subgraph cfg[Конфигурация]
-    YAML[STACK_MCP_CONFIG YAML]
+    YAML[SDOCS_MCP_CONFIG YAML]
     ENV[Переменные окружения]
   end
 
@@ -55,7 +55,7 @@ flowchart TB
 
 | Модуль | Включение / вход | Что делает (кратко) | Куда пишет |
 |--------|------------------|---------------------|------------|
-| **Ядро** | всегда | `stack_mcp_status`, политика `ssh_command_policy` | только ответ MCP |
+| **Ядро** | всегда | `sdocs_mcp_status`, политика `ssh_command_policy` | только ответ MCP |
 | **PostgreSQL** | `modules.postgres`, DSN, allowlist схем/БД; SQL в YAML для allowlisted | Диагностические SELECT + именованные запросы по `query_id` | нет (только чтение БД) |
 | **Redis** | `modules.redis`, URL, лимиты | PING, INFO, GET/MGET/HGETALL, опц. SETEX, SCAN по allowlist | Redis при `redis_setex` |
 | **Kafka** | `modules.kafka`, bootstrap, `topic_allowlist`, опц. produce/admin | list/describe/consume; produce/create при флагах | топики Kafka |
@@ -63,7 +63,7 @@ flowchart TB
 | **OpenSearch** | `modules.opensearch`, hosts, TLS, `allow_write` для мутаций | cluster/cat/search; RAG store/search/delete по политике | индексы OS; опц. **search_audit_log**; опц. **tool_call_audit** (журнал вызовов tools) |
 | **Почта** | `modules.mail`, пароли через env | IMAP list/search/fetch; SMTP send | исходящие письма |
 | **SSH** | `modules.ssh`, хосты и политика в конфиге | одна команда на хост после фильтров | stdout на удалённом хосте |
-| **Веб-UI** | `stack-mcp-ui`, опц. `STACK_MCP_EMBED_MCP` | дашборд, `/api/*`, `/metrics` | опц. JSONL `STACK_MCP_UI_AUDIT_LOG_PATH` (в проде обычно `/app/data/logs/...`) |
+| **Веб-UI** | `sdocs-mcp-ui`, опц. `SDOCS_MCP_EMBED_MCP` | дашборд, `/api/*`, `/metrics` | опц. JSONL `SDOCS_MCP_UI_AUDIT_LOG_PATH` (в проде обычно `/app/data/logs/...`) |
 
 ## Аудит вызовов tools (OpenSearch)
 
@@ -73,7 +73,11 @@ flowchart TB
 
 | Режим | Где |
 |--------|-----|
-| Streamable HTTP / SSE | отдельный процесс `stack-mcp` или путь **`/mcp`** у UI |
-| stdio | только при **`STACK_MCP_DEV_LOCAL=true`** |
+| Streamable HTTP / SSE | отдельный процесс `sdocs-mcp` или путь **`/mcp`** у UI |
+| stdio | только при **`SDOCS_MCP_DEV_LOCAL=true`** |
 
 Подробные таблицы tools: **[CAPABILITIES.md](CAPABILITIES.md)**.
+
+## Витрина для руководства
+
+Визуальный one-pager для показа ТОП (без зависимости от GitHub): **[EXECUTIVE_ONEPAGER.html](EXECUTIVE_ONEPAGER.html)**. Сценарий и тайминг — **[EXECUTIVE_ONEPAGER.md](EXECUTIVE_ONEPAGER.md)**.

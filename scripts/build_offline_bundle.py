@@ -12,7 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 WHEEL_DIR = ROOT / "offline-wheels"
 DIST = ROOT / "dist"
-DEFAULT_ZIP = DIST / "stack-mcp-server-offline.zip"
+DEFAULT_ZIP = DIST / "sdocs-mcp-offline.zip"
 
 # Не класть в архив
 SKIP_DIR_NAMES = frozenset(

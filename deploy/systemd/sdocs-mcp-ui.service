@@ -1,0 +1,24 @@
+[Unit]
+Description=sdocs-mcp UI and Prometheus metrics (/health, /metrics)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=sdocsmcp
+Group=sdocsmcp
+WorkingDirectory=/opt/sdocs-mcp
+EnvironmentFile=-/etc/sdocs-mcp/ui.env
+Environment=SDOCS_MCP_CONFIG=/etc/sdocs-mcp/config.yaml
+ExecStart=/opt/sdocs-mcp/.venv/bin/sdocs-mcp-ui
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/log/sdocs-mcp
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target

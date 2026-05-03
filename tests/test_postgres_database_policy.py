@@ -3,8 +3,8 @@ from __future__ import annotations
 import pytest
 import yaml
 
-from stack_mcp.config import AppConfig, PostgresModuleConfig
-from stack_mcp.postgres_tools import _ensure_db_allowed
+from sdocs_mcp.config import AppConfig, PostgresModuleConfig
+from sdocs_mcp.postgres_tools import _ensure_db_allowed
 
 
 def test_postgres_allowed_databases_explicit() -> None:

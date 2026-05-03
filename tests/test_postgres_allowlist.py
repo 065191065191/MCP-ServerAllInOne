@@ -6,9 +6,9 @@ from pathlib import Path
 import pytest
 import yaml
 
-from stack_mcp.config import AppConfig, PostgresAllowlistedQuery
-from stack_mcp.postgres_allowlist_sql import normalize_and_validate_allowlisted_sql
-from stack_mcp.postgres_tools import postgres_allowlisted_query, postgres_allowlisted_query_catalog
+from sdocs_mcp.config import AppConfig, PostgresAllowlistedQuery
+from sdocs_mcp.postgres_allowlist_sql import normalize_and_validate_allowlisted_sql
+from sdocs_mcp.postgres_tools import postgres_allowlisted_query, postgres_allowlisted_query_catalog
 
 
 def test_validate_allowlisted_sql_accepts_select() -> None:
@@ -76,7 +76,7 @@ def test_duplicate_allowlist_id_in_config(tmp_path: Path) -> None:
 
 
 def test_postgres_allowlisted_query_rejects_malformed_id() -> None:
-    from stack_mcp.config import PostgresModuleConfig
+    from sdocs_mcp.config import PostgresModuleConfig
 
     cfg = PostgresModuleConfig(
         enabled=True,
@@ -89,7 +89,7 @@ def test_postgres_allowlisted_query_rejects_malformed_id() -> None:
 
 
 def test_allowlisted_query_catalog_json() -> None:
-    from stack_mcp.config import PostgresModuleConfig
+    from sdocs_mcp.config import PostgresModuleConfig
 
     cfg = PostgresModuleConfig(
         enabled=True,

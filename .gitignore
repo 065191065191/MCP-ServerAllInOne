@@ -17,6 +17,8 @@ logs/*.log
 .env
 deploy/.env
 # Собранный образ (docker save) — большой бинарник, не коммитить
+deploy/sdocs-mcp-ui-*.tar
+deploy/sdocs-mcp-ui-*.tar.gz
 deploy/stack-mcp-ui-*.tar
 deploy/stack-mcp-ui-*.tar.gz
 # URL прокси с учётными данными для docker build --secret (не коммитить)

@@ -1,14 +1,14 @@
-# Copy to config.yaml or set STACK_MCP_CONFIG=/path/to/config.yaml
+# Copy to config.yaml or set SDOCS_MCP_CONFIG=/path/to/config.yaml
 #
-# MCP процесс (stack-mcp): HTTP по умолчанию — STACK_MCP_TRANSPORT=streamable-http,
-# STACK_MCP_HOST=0.0.0.0, STACK_MCP_PORT=8765, путь /mcp. Localhost без STACK_MCP_DEV_LOCAL=true запрещён.
-# Stateless Streamable HTTP (несколько воркеров / подов без sticky): переменная процесса STACK_MCP_STATELESS_HTTP=true
+# MCP процесс (sdocs-mcp): HTTP по умолчанию — SDOCS_MCP_TRANSPORT=streamable-http,
+# SDOCS_MCP_HOST=0.0.0.0, SDOCS_MCP_PORT=8765, путь /mcp. Localhost без SDOCS_MCP_DEV_LOCAL=true запрещён.
+# Stateless Streamable HTTP (несколько воркеров / подов без sticky): переменная процесса SDOCS_MCP_STATELESS_HTTP=true
 # (не поле YAML) — см. README и deploy/README.md.
 #
 # mTLS (HTTPS + обязательный клиентский сертификат): только если заданы все три файла —
-#   STACK_MCP_MTLS_CERT_FILE, STACK_MCP_MTLS_KEY_FILE, STACK_MCP_MTLS_ROOT_CA_FILE
+#   SDOCS_MCP_MTLS_CERT_FILE, SDOCS_MCP_MTLS_KEY_FILE, SDOCS_MCP_MTLS_ROOT_CA_FILE
 # (серверный CRT, KEY, CA для проверки клиента). Иначе слушаем plain HTTP.
-# Опционально: STACK_MCP_MTLS_KEY_PASSWORD — пароль от ключа.
+# Опционально: SDOCS_MCP_MTLS_KEY_PASSWORD — пароль от ключа.
 #
 # Клиентский mTLS к Kafka / OpenSearch / Postgres / Redis / Prometheus: в каждом модуле
 # либо все три файла, либо ни одного — mtls_cert_file, mtls_key_file, mtls_root_ca_file
@@ -47,14 +47,14 @@ modules:
       retrieval_size_cap: 15
       allow_delete_by_id: false
       auto_create_index: false
-      source_tag: stack-mcp-rag
+      source_tag: sdocs-mcp-rag
     # Журнал вызовов MCP tools в OpenSearch (аргументы, ответ, классификация, длительность).
-    # Нужен opensearch.enabled=true. Идентификатор инстанса: STACK_MCP_AUDIT_INSTANCE_ID или instance_id.
+    # Нужен opensearch.enabled=true. Идентификатор инстанса: SDOCS_MCP_AUDIT_INSTANCE_ID или instance_id.
     tool_call_audit:
       enabled: false
-      index: stack-mcp-tool-audit
+      index: sdocs-mcp-tool-audit
       instance_id: ""
-      # Кто вызвал: HTTP-заголовок caller_http_header → STACK_MCP_AUDIT_CALLER_ID → default_caller_id → unknown
+      # Кто вызвал: HTTP-заголовок caller_http_header → SDOCS_MCP_AUDIT_CALLER_ID → default_caller_id → unknown
       default_caller_id: ""
       caller_http_header: null
       # true — писать caller_client_ip из сокета ASGI (за L7-прокси часто IP прокси, не конечный клиент)
@@ -63,7 +63,7 @@ modules:
       max_result_chars: 5000000
       auto_create_index: true
       exclude_tools: []
-      # Пример шума: exclude_tools: [ "stack_mcp_status" ]
+      # Пример шума: exclude_tools: [ "sdocs_mcp_status" ]
 
   kafka:
     enabled: false
@@ -190,7 +190,7 @@ modules:
     #   # password_env: SSH_WEB_PROD1_PASSWORD
 
   # Почта: пароли только из env (imap_password_env обязателен при enabled: true).
-  # Пример: export STACK_MCP_MAIL_IMAP_PASSWORD='...'
+  # Пример: export SDOCS_MCP_MAIL_IMAP_PASSWORD='...'
   mail:
     enabled: false
     imap_host: localhost
@@ -198,7 +198,7 @@ modules:
     imap_ssl: true
     imap_username: ""
     imap_username_env: null
-    imap_password_env: STACK_MCP_MAIL_IMAP_PASSWORD
+    imap_password_env: SDOCS_MCP_MAIL_IMAP_PASSWORD
     default_mailbox: INBOX
     default_from_env: null
     list_mailboxes_max: 200

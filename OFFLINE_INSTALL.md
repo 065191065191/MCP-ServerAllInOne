@@ -1,6 +1,6 @@
 # Установка без интернета
 
-В архиве **`dist/stack-mcp-server-offline.zip`** (после сборки) лежит исходный код и папка **`offline-wheels/`** со всеми зависимостями (версии — как разрешит pip на момент сборки, без кэша: `--no-cache-dir`).
+В архиве **`dist/sdocs-mcp-offline.zip`** (после сборки) лежит исходный код и папка **`offline-wheels/`** со всеми зависимостями (версии — как разрешит pip на момент сборки, без кэша: `--no-cache-dir`).
 
 ## Требования на целевой машине
 
@@ -52,10 +52,10 @@
 3. Конфиг: скопировать `config.example.yaml` → `config.yaml`, выставить переменную:
 
    ```text
-   STACK_MCP_CONFIG=<полный путь к config.yaml>
+   SDOCS_MCP_CONFIG=<полный путь к config.yaml>
    ```
 
-4. Запуск MCP и UI — как в `README.md` (`stack-mcp`, `stack-mcp-ui`).
+4. Запуск MCP и UI — как в `README.md` (`sdocs-mcp`, `sdocs-mcp-ui`).
 
 ## Пересборка архива (на машине с интернетом)
 

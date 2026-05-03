@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from stack_mcp.config import SshModuleConfig
-from stack_mcp.ssh_tools import _validate_command
+from sdocs_mcp.config import SshModuleConfig
+from sdocs_mcp.ssh_tools import _validate_command
 
 
 def test_ssh_rejects_empty() -> None:

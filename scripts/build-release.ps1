@@ -9,16 +9,16 @@ $Stamp = Get-Date -Format "yyyyMMddHHmm"
 $Out = Join-Path $Root "release"
 New-Item -ItemType Directory -Force -Path $Out | Out-Null
 
-$FullName = "stack-mcp-server-full-${Version}-${Stamp}.tar.gz"
-$RunName = "stack-mcp-server-runtime-${Version}-${Stamp}.tar.gz"
-$OnlineName = "stack-mcp-server-runtime-online-${Version}-${Stamp}.tar.gz"
+$FullName = "sdocs-mcp-full-${Version}-${Stamp}.tar.gz"
+$RunName = "sdocs-mcp-runtime-${Version}-${Stamp}.tar.gz"
+$OnlineName = "sdocs-mcp-runtime-online-${Version}-${Stamp}.tar.gz"
 $FullPath = Join-Path $Out $FullName
 $RunPath = Join-Path $Out $RunName
 $OnlinePath = Join-Path $Out $OnlineName
 
 $excludes = @(
  ".git", ".venv", "venv", "__pycache__", ".pytest_cache", ".ruff_cache",
-    "*.egg-info", "dist", "build", "release", ".bundles", "stack-mcp-server-*.tar.gz"
+    "*.egg-info", "dist", "build", "release", ".bundles", "sdocs-mcp-*.tar.gz"
 )
 
 Write-Host "==> full bundle -> $FullPath"
@@ -43,8 +43,8 @@ function Copy-RuntimeTree {
 
 $Stage = Join-Path $env:TEMP ("mcp-runtime-" + [Guid]::NewGuid().ToString("n"))
 $StageOnline = Join-Path $env:TEMP ("mcp-online-" + [Guid]::NewGuid().ToString("n"))
-$RunRootName = "stack-mcp-server-runtime-$Version"
-$OnlineRootName = "stack-mcp-server-runtime-online-$Version"
+$RunRootName = "sdocs-mcp-runtime-$Version"
+$OnlineRootName = "sdocs-mcp-runtime-online-$Version"
 $RunRoot = Join-Path $Stage $RunRootName
 $OnlineRoot = Join-Path $StageOnline $OnlineRootName
 
@@ -52,7 +52,7 @@ Copy-RuntimeTree -Dest $RunRoot -IncludeWheels $true
 Copy-RuntimeTree -Dest $OnlineRoot -IncludeWheels $false
 
 $BUNDLE = @"
-stack-mcp-server runtime bundle (with vendored wheels)
+sdocs-mcp runtime bundle (with vendored wheels)
 version: $Version
 built: $Stamp
 
@@ -62,7 +62,7 @@ Install offline: ./install.sh --offline ./wheels
 Set-Content -Path (Join-Path $RunRoot "BUNDLE.txt") -Value $BUNDLE -Encoding UTF8
 
 $BUNDLEOnline = @"
-stack-mcp-server runtime-online (no wheels)
+sdocs-mcp runtime-online (no wheels)
 version: $Version
 built: $Stamp
 

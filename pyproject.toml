@@ -3,9 +3,9 @@ requires = ["setuptools>=69", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "stack-mcp-server"
+name = "sdocs-mcp"
 version = "0.3.2"
-description = "MCP по HTTP: модули данных (OpenSearch, Kafka, Postgres, Redis, Prometheus, SSH, почта)"
+description = "SDocsMCP — MCP по HTTP: модули данных (OpenSearch, Kafka, Postgres, Redis, Prometheus, SSH, почта, Atlassian)"
 readme = "README.md"
 authors = [{ name = "Gos Stepan Ulievich" }]
 requires-python = ">=3.11"
@@ -23,8 +23,8 @@ dependencies = [
 ]
 
 [project.scripts]
-stack-mcp = "stack_mcp.server:main"
-stack-mcp-ui = "stack_mcp.info_app:main"
+sdocs-mcp = "sdocs_mcp.server:main"
+sdocs-mcp-ui = "sdocs_mcp.info_app:main"
 
 [project.optional-dependencies]
 dev = [

@@ -11,11 +11,11 @@ from typing import Any
 
 from opensearchpy.exceptions import OpenSearchException
 
-from stack_mcp.config import OpenSearchModuleConfig, OpenSearchToolCallAuditConfig
-from stack_mcp.opensearch_tools import connect_opensearch
-from stack_mcp.tool_audit_http_context import current_http_caller_hints
+from sdocs_mcp.config import OpenSearchModuleConfig, OpenSearchToolCallAuditConfig
+from sdocs_mcp.opensearch_tools import connect_opensearch
+from sdocs_mcp.tool_audit_http_context import current_http_caller_hints
 
-log = logging.getLogger("stack_mcp.tool_audit")
+log = logging.getLogger("sdocs_mcp.tool_audit")
 
 # Увеличивайте при изменении mapping / обязательных полей (старый индекс с strict — см. README).
 _TOOL_AUDIT_SCHEMA_VERSION = 3
@@ -78,7 +78,7 @@ def _duration_bucket(duration_ms: float) -> str:
 
 
 def _tool_family(name: str) -> str:
-    if name == "stack_mcp_status":
+    if name == "sdocs_mcp_status":
         return "meta"
     if "_" in name:
         return name.split("_", 1)[0]
@@ -119,7 +119,7 @@ def tool_audit_classification_facets(
         if name.startswith(prefix):
             module = mod
             break
-    if name == "stack_mcp_status":
+    if name == "sdocs_mcp_status":
         module = "core"
 
     if "opensearch_rag" in name:
@@ -233,7 +233,7 @@ def resolve_tool_audit_caller(aud: OpenSearchToolCallAuditConfig) -> tuple[str, 
     hints = current_http_caller_hints()
     principal = (hints.header_caller or "").strip()
     if not principal:
-        principal = (os.environ.get("STACK_MCP_AUDIT_CALLER_ID") or aud.default_caller_id or "").strip()
+        principal = (os.environ.get("SDOCS_MCP_AUDIT_CALLER_ID") or aud.default_caller_id or "").strip()
     if not principal:
         principal = "unknown"
     ip = ""
@@ -268,7 +268,7 @@ def audit_log_tool_invocation_sync(
     facets = tool_audit_classification_facets(tool_name, arguments, duration_ms)
     args_s, args_trunc = _arguments_json(arguments or {}, aud.max_arguments_json_chars)
     res_s, res_trunc = _tool_result_to_audit_text(result, aud.max_result_chars)
-    instance = (os.environ.get("STACK_MCP_AUDIT_INSTANCE_ID") or aud.instance_id or "").strip()
+    instance = (os.environ.get("SDOCS_MCP_AUDIT_INSTANCE_ID") or aud.instance_id or "").strip()
     caller_id, caller_ip = resolve_tool_audit_caller(aud)
 
     body: dict[str, Any] = {

@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from stack_mcp.config import AppConfig, OpenSearchToolCallAuditConfig
-from stack_mcp.tool_audit_http_context import http_caller_hints_override
-from stack_mcp.tool_audit_opensearch import (
+from sdocs_mcp.config import AppConfig, OpenSearchToolCallAuditConfig
+from sdocs_mcp.tool_audit_http_context import http_caller_hints_override
+from sdocs_mcp.tool_audit_opensearch import (
     audit_should_skip,
     classify_tool_invocation,
     default_tool_audit_index_body,
@@ -16,7 +16,7 @@ from stack_mcp.tool_audit_opensearch import (
 
 
 def test_classify_core() -> None:
-    c = classify_tool_invocation("stack_mcp_status")
+    c = classify_tool_invocation("sdocs_mcp_status")
     assert c["module"] == "core"
     assert c["category"] == "meta"
     assert c["operation_kind"] == "read"
@@ -93,13 +93,13 @@ def test_resolve_audit_caller_unknown() -> None:
 
 
 def test_resolve_audit_caller_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("STACK_MCP_AUDIT_CALLER_ID", "from-env")
+    monkeypatch.setenv("SDOCS_MCP_AUDIT_CALLER_ID", "from-env")
     aud = OpenSearchToolCallAuditConfig(enabled=True)
     assert resolve_tool_audit_caller(aud)[0] == "from-env"
 
 
 def test_resolve_audit_caller_header_over_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("STACK_MCP_AUDIT_CALLER_ID", "from-env")
+    monkeypatch.setenv("SDOCS_MCP_AUDIT_CALLER_ID", "from-env")
     aud = OpenSearchToolCallAuditConfig(enabled=True)
     with http_caller_hints_override(header_caller="from-header", client_host="10.0.0.2"):
         assert resolve_tool_audit_caller(aud) == ("from-header", "")
@@ -112,8 +112,8 @@ def test_resolve_audit_caller_ip_when_enabled() -> None:
 
 
 def test_exclude_tools() -> None:
-    aud = OpenSearchToolCallAuditConfig(enabled=True, exclude_tools=["stack_mcp_status"])
-    assert audit_should_skip("stack_mcp_status", aud) is True
+    aud = OpenSearchToolCallAuditConfig(enabled=True, exclude_tools=["sdocs_mcp_status"])
+    assert audit_should_skip("sdocs_mcp_status", aud) is True
     assert audit_should_skip("redis_ping", aud) is False
 
 

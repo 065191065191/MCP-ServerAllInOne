@@ -9,21 +9,21 @@ from typing import Any
 import anyio
 from mcp.server.fastmcp import FastMCP
 
-from stack_mcp.config import AppConfig
-from stack_mcp.tool_audit_opensearch import audit_log_tool_invocation_sync, audit_should_skip
+from sdocs_mcp.config import AppConfig
+from sdocs_mcp.tool_audit_opensearch import audit_log_tool_invocation_sync, audit_should_skip
 
-_log = logging.getLogger("stack_mcp.audit")
+_log = logging.getLogger("sdocs_mcp.audit")
 
 
 class AuditedFastMCP(FastMCP):
     """Тот же FastMCP, но после каждого call_tool пишет событие в OpenSearch (не ломает вызов при сбое записи)."""
 
     def __init__(self, **kwargs: Any):
-        self._stack_mcp_app_config: AppConfig = kwargs.pop("app_config")
+        self._sdocs_mcp_app_config: AppConfig = kwargs.pop("app_config")
         super().__init__(**kwargs)
 
     async def call_tool(self, name: str, arguments: dict[str, Any]) -> Any:
-        cfg = self._stack_mcp_app_config.modules.opensearch
+        cfg = self._sdocs_mcp_app_config.modules.opensearch
         aud = cfg.tool_call_audit
         skip = not aud.enabled or not cfg.enabled or audit_should_skip(name, aud)
         t0 = time.perf_counter()

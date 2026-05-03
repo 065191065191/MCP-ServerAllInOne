@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from stack_mcp.backend_tls import resolve_client_mtls, validate_client_mtls_triplet_files
-from stack_mcp.config import RedisModuleConfig
+from sdocs_mcp.backend_tls import resolve_client_mtls, validate_client_mtls_triplet_files
+from sdocs_mcp.config import RedisModuleConfig
 
 
 def test_mtls_incomplete_raises() -> None:

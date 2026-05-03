@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Минимальный локальный запуск: venv → pip install → stack-mcp (Streamable HTTP).
+# Минимальный локальный запуск: venv → pip install → sdocs-mcp (Streamable HTTP).
 # Требуется: Python 3.11+, интернет (для pip).
 set -euo pipefail
 
@@ -41,27 +41,27 @@ if [[ ! -f config.yaml ]]; then
   echo "[install] Создан config.yaml из config.example.yaml — при необходимости отредактируйте."
 fi
 
-export STACK_MCP_CONFIG="${STACK_MCP_CONFIG:-$ROOT/config.yaml}"
-export STACK_MCP_TRANSPORT="${STACK_MCP_TRANSPORT:-streamable-http}"
-export STACK_MCP_HOST="${STACK_MCP_HOST:-127.0.0.1}"
-export STACK_MCP_PORT="${STACK_MCP_PORT:-8765}"
-export STACK_MCP_DEV_LOCAL="${STACK_MCP_DEV_LOCAL:-true}"
+export SDOCS_MCP_CONFIG="${SDOCS_MCP_CONFIG:-$ROOT/config.yaml}"
+export SDOCS_MCP_TRANSPORT="${SDOCS_MCP_TRANSPORT:-streamable-http}"
+export SDOCS_MCP_HOST="${SDOCS_MCP_HOST:-127.0.0.1}"
+export SDOCS_MCP_PORT="${SDOCS_MCP_PORT:-8765}"
+export SDOCS_MCP_DEV_LOCAL="${SDOCS_MCP_DEV_LOCAL:-true}"
 
 MODE="${1:-mcp}"
 case "$MODE" in
   mcp)
-    echo "[install] STACK_MCP_CONFIG=$STACK_MCP_CONFIG"
-    echo "[install] MCP: http://${STACK_MCP_HOST}:${STACK_MCP_PORT}/mcp (transport=$STACK_MCP_TRANSPORT)"
-    exec stack-mcp
+    echo "[install] SDOCS_MCP_CONFIG=$SDOCS_MCP_CONFIG"
+    echo "[install] MCP: http://${SDOCS_MCP_HOST}:${SDOCS_MCP_PORT}/mcp (transport=$SDOCS_MCP_TRANSPORT)"
+    exec sdocs-mcp
     ;;
   ui)
-    export STACK_MCP_UI_HOST="${STACK_MCP_UI_HOST:-127.0.0.1}"
-    export STACK_MCP_UI_PORT="${STACK_MCP_UI_PORT:-8888}"
-    echo "[install] UI: http://${STACK_MCP_UI_HOST}:${STACK_MCP_UI_PORT}/"
-    exec stack-mcp-ui
+    export SDOCS_MCP_UI_HOST="${SDOCS_MCP_UI_HOST:-127.0.0.1}"
+    export SDOCS_MCP_UI_PORT="${SDOCS_MCP_UI_PORT:-8888}"
+    echo "[install] UI: http://${SDOCS_MCP_UI_HOST}:${SDOCS_MCP_UI_PORT}/"
+    exec sdocs-mcp-ui
     ;;
   install-only)
-    echo "[install] Зависимости установлены, venv активен в этой сессии. Запуск: stack-mcp  или  stack-mcp-ui"
+    echo "[install] Зависимости установлены, venv активен в этой сессии. Запуск: sdocs-mcp  или  sdocs-mcp-ui"
     ;;
   *)
     echo "Использование: $0 [mcp|ui|install-only]" >&2

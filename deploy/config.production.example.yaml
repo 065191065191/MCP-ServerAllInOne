@@ -1,11 +1,11 @@
 # Прод-пример: подставьте реальные DSN/пароли (в YAML подстановки ${VAR} не выполняются —
 # храните файл как секрет или собирайте из шаблона в CI/CD).
-# Несколько воркеров UI или реплик без sticky: задайте в окружении процесса STACK_MCP_STATELESS_HTTP=true (не в этом YAML).
+# Несколько воркеров UI или реплик без sticky: задайте в окружении процесса SDOCS_MCP_STATELESS_HTTP=true (не в этом YAML).
 
 modules:
   postgres:
     enabled: true
-    dsn: postgresql://stack_mcp:REPLACE_PASSWORD@db.internal:5432/observability
+    dsn: postgresql://sdocs_mcp:REPLACE_PASSWORD@db.internal:5432/observability
     allowed_databases: [observability]
     schema_allowlist: [public]
     statement_timeout_seconds: 25
@@ -24,7 +24,7 @@ modules:
     bootstrap_servers: [kafka.internal:9092]
     security_protocol: SASL_SSL
     sasl_mechanism: SCRAM-SHA-512
-    sasl_username: stack-mcp
+    sasl_username: sdocs-mcp
     sasl_password: REPLACE_KAFKA_PASSWORD
     topic_allowlist: [prod.events]
     allow_produce: false
@@ -35,7 +35,7 @@ modules:
     hosts: [https://opensearch.internal:9200]
     use_ssl: true
     verify_certs: true
-    username: stack_mcp
+    username: sdocs_mcp
     password: null
     password_env: OPENSEARCH_PASSWORD
     allow_write: false
@@ -46,15 +46,15 @@ modules:
       retrieval_size_cap: 12
       allow_delete_by_id: false
       auto_create_index: false
-    # Журнал вызовов MCP tools (см. docs/TOOL_CALL_AUDIT.md). STACK_MCP_AUDIT_INSTANCE_ID — реплика;
-    # caller_id: прокси ставит caller_http_header, иначе STACK_MCP_AUDIT_CALLER_ID / default_caller_id.
+    # Журнал вызовов MCP tools (см. docs/TOOL_CALL_AUDIT.md). SDOCS_MCP_AUDIT_INSTANCE_ID — реплика;
+    # caller_id: прокси ставит caller_http_header, иначе SDOCS_MCP_AUDIT_CALLER_ID / default_caller_id.
     # tool_call_audit:
     #   enabled: true
-    #   index: stack-mcp-tool-audit-prod
+    #   index: sdocs-mcp-tool-audit-prod
     #   caller_http_header: X-Audit-Caller
     #   log_http_client_ip: false
     #   auto_create_index: true
-    #   exclude_tools: [stack_mcp_status]
+    #   exclude_tools: [sdocs_mcp_status]
 
   prometheus:
     enabled: true

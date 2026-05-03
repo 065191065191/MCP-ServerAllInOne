@@ -1,5 +1,5 @@
 ﻿# Production template for MCP container.
-# Mount into container as /app/config/config.yaml and set STACK_MCP_CONFIG accordingly.
+# Mount into container as /app/config/config.yaml and set SDOCS_MCP_CONFIG accordingly.
 
 modules:
   opensearch:
@@ -91,4 +91,4 @@ modules:
     forbidden_substrings: []
     forbidden_regex: []
     hosts: []
-    # Сотни хостов: смонтируйте второй YAML и STACK_MCP_SSH_HOSTS_FILE (см. docs/SSH_SCALE.md).
+    # Сотни хостов: смонтируйте второй YAML и SDOCS_MCP_SSH_HOSTS_FILE (см. docs/SSH_SCALE.md).

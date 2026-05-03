@@ -1,5 +1,5 @@
-# Пример фрагмента для STACK_MCP_SSH_HOSTS_FILE (или вставка в основной config).
-# Можно сгенерировать: python scripts/generate_ssh_hosts_yaml.py deploy/examples/ssh_inventory.csv -o /etc/stack-mcp/ssh_hosts.yaml
+# Пример фрагмента для SDOCS_MCP_SSH_HOSTS_FILE (или вставка в основной config).
+# Можно сгенерировать: python scripts/generate_ssh_hosts_yaml.py deploy/examples/ssh_inventory.csv -o /etc/sdocs-mcp/ssh_hosts.yaml
 
 - id: web-01
   hostname: 203.0.113.10

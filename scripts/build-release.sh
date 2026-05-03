@@ -11,9 +11,9 @@ STAMP="$(date +%Y%m%d%H%M)"
 OUT="$ROOT/release"
 mkdir -p "$OUT"
 
-FULL_NAME="stack-mcp-server-full-${VERSION}-${STAMP}.tar.gz"
-RUN_NAME="stack-mcp-server-runtime-${VERSION}-${STAMP}.tar.gz"
-ONLINE_NAME="stack-mcp-server-runtime-online-${VERSION}-${STAMP}.tar.gz"
+FULL_NAME="sdocs-mcp-full-${VERSION}-${STAMP}.tar.gz"
+RUN_NAME="sdocs-mcp-runtime-${VERSION}-${STAMP}.tar.gz"
+ONLINE_NAME="sdocs-mcp-runtime-online-${VERSION}-${STAMP}.tar.gz"
 
 echo "==> полная сборка -> $OUT/$FULL_NAME"
 tar -czf "$OUT/$FULL_NAME" \
@@ -29,7 +29,7 @@ tar -czf "$OUT/$FULL_NAME" \
   --exclude='release' \
   --exclude='.bundles' \
   --exclude='logs/*.log' \
-  --exclude='stack-mcp-server-*.tar.gz' \
+  --exclude='sdocs-mcp-*.tar.gz' \
   -C "$ROOT" \
   .
 
@@ -51,14 +51,14 @@ STAGE="$(mktemp -d)"
 STAGE_ONLINE="$(mktemp -d)"
 trap 'rm -rf "$STAGE" "$STAGE_ONLINE"' EXIT
 
-RUN_ROOT="$STAGE/stack-mcp-server-runtime-${VERSION}"
-ONLINE_ROOT="$STAGE_ONLINE/stack-mcp-server-runtime-online-${VERSION}"
+RUN_ROOT="$STAGE/sdocs-mcp-runtime-${VERSION}"
+ONLINE_ROOT="$STAGE_ONLINE/sdocs-mcp-runtime-online-${VERSION}"
 
 _stage_runtime "$RUN_ROOT" yes
 _stage_runtime "$ONLINE_ROOT" no
 
 cat > "$RUN_ROOT/BUNDLE.txt" <<EOF
-stack-mcp-server runtime bundle (with vendored wheels)
+sdocs-mcp runtime bundle (with vendored wheels)
 version: ${VERSION}
 built: ${STAMP}
 
@@ -70,7 +70,7 @@ Offline: ./install.sh --offline ./wheels
 EOF
 
 cat > "$ONLINE_ROOT/BUNDLE.txt" <<EOF
-stack-mcp-server runtime-online bundle (no wheels)
+sdocs-mcp runtime-online bundle (no wheels)
 version: ${VERSION}
 built: ${STAMP}
 

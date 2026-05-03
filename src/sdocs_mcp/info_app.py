@@ -19,24 +19,25 @@ from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from kafka import KafkaConsumer, TopicPartition
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from stack_mcp.backend_tls import (
+from sdocs_mcp.backend_tls import (
     make_postgres_conninfo,
     prometheus_httpx_verify_and_cert,
 )
-from stack_mcp.config import AppConfig, load_config
-from stack_mcp.executive_dashboard_html import DASHBOARD_HTML
-from stack_mcp.kafka_tools import kafka_broker_client_config
-from stack_mcp.mail_tools import mail_imap_verify
-from stack_mcp.mtls import resolve_mcp_mtls_uvicorn_kwargs
-from stack_mcp.opensearch_tools import connect_opensearch
-from stack_mcp.postgres_tools import postgres_allowlisted_query_catalog
-from stack_mcp.redis_tools import redis_ping, redis_setex
-from stack_mcp.server import build_mcp
-from stack_mcp.tool_audit_http_context import ToolAuditCallerMiddleware
+from sdocs_mcp.config import AppConfig, load_config
+from sdocs_mcp.executive_dashboard_html import DASHBOARD_HTML
+from sdocs_mcp.kafka_tools import kafka_broker_client_config
+from sdocs_mcp.mail_tools import mail_imap_verify
+from sdocs_mcp.mtls import resolve_mcp_mtls_uvicorn_kwargs
+from sdocs_mcp.opensearch_tools import connect_opensearch
+from sdocs_mcp.postgres_tools import postgres_allowlisted_query_catalog
+from sdocs_mcp.redis_tools import redis_ping, redis_setex
+from sdocs_mcp.server import build_mcp
+from sdocs_mcp.tool_audit_http_context import ToolAuditCallerMiddleware
+from sdocs_mcp.ui_nav import inject_subpage
 
 # Безопасный список: только чтение / диагностика + статус (без произвольного SQL и т.д.).
 _INVOKE_ALLOWLIST: dict[str, dict[str, Any] | None] = {
-    "stack_mcp_status": {},
+    "sdocs_mcp_status": {},
     "redis_ping": {},
     "redis_info": {},
     "redis_dbsize": {},
@@ -52,18 +53,18 @@ _INVOKE_ALLOWLIST: dict[str, dict[str, Any] | None] = {
     "ssh_command_policy": {},
 }
 
-app = FastAPI(title="stack-mcp UI", version="0.3.2")
+app = FastAPI(title="SDocsMCP UI", version="0.3.2")
 
-_trusted_hosts_raw = (os.environ.get("STACK_MCP_UI_TRUSTED_HOSTS") or "").strip()
+_trusted_hosts_raw = (os.environ.get("SDOCS_MCP_UI_TRUSTED_HOSTS") or "").strip()
 if _trusted_hosts_raw:
     _trusted_hosts = [h.strip() for h in _trusted_hosts_raw.split(",") if h.strip()]
     if _trusted_hosts:
         app.add_middleware(TrustedHostMiddleware, allowed_hosts=_trusted_hosts)
 
 
-def _embed_stack_mcp_if_enabled() -> None:
-    """Один порт с UI: Streamable HTTP MCP на пути /mcp (STACK_MCP_EMBED_MCP=true)."""
-    if (os.environ.get("STACK_MCP_EMBED_MCP") or "").strip().lower() not in ("1", "true", "yes"):
+def _embed_sdocs_mcp_if_enabled() -> None:
+    """Один порт с UI: Streamable HTTP MCP на пути /mcp (SDOCS_MCP_EMBED_MCP=true)."""
+    if (os.environ.get("SDOCS_MCP_EMBED_MCP") or "").strip().lower() not in ("1", "true", "yes"):
         return
     cfg = load_config()
     os_mod = cfg.modules.opensearch
@@ -75,25 +76,25 @@ def _embed_stack_mcp_if_enabled() -> None:
         )
     mcp = build_mcp(cfg, streamable_http_path="/")
     app.mount("/mcp", mcp.streamable_http_app())
-    logging.getLogger("stack_mcp.ui").info(
-        "Embedded stack-mcp: Streamable HTTP on same port as UI at path /mcp "
-        "(set STACK_MCP_EMBED_MCP=false to run stack-mcp on a separate port)."
+    logging.getLogger("sdocs_mcp.ui").info(
+        "Embedded sdocs-mcp: Streamable HTTP on same port as UI at path /mcp "
+        "(set SDOCS_MCP_EMBED_MCP=false to run sdocs-mcp on a separate port)."
     )
 
 
-_embed_stack_mcp_if_enabled()
+_embed_sdocs_mcp_if_enabled()
 
-_API_TOKEN = (os.environ.get("STACK_MCP_UI_TOKEN") or "").strip()
-_ENABLE_INVOKE = os.environ.get("STACK_MCP_UI_ENABLE_INVOKE", "false").strip().lower() == "true"
-_ENABLE_SEED = os.environ.get("STACK_MCP_UI_ENABLE_SEED", "false").strip().lower() == "true"
-_RATE_LIMIT_RPM = max(1, int(os.environ.get("STACK_MCP_UI_RATE_LIMIT_RPM", "60")))
-_AUDIT_LOG_PATH = Path(os.environ.get("STACK_MCP_UI_AUDIT_LOG_PATH", "logs/ui-audit.log"))
+_API_TOKEN = (os.environ.get("SDOCS_MCP_UI_TOKEN") or "").strip()
+_ENABLE_INVOKE = os.environ.get("SDOCS_MCP_UI_ENABLE_INVOKE", "false").strip().lower() == "true"
+_ENABLE_SEED = os.environ.get("SDOCS_MCP_UI_ENABLE_SEED", "false").strip().lower() == "true"
+_RATE_LIMIT_RPM = max(1, int(os.environ.get("SDOCS_MCP_UI_RATE_LIMIT_RPM", "60")))
+_AUDIT_LOG_PATH = Path(os.environ.get("SDOCS_MCP_UI_AUDIT_LOG_PATH", "logs/ui-audit.log"))
 
 # /metrics (и опционально тот же секрет в UI status-page): без IP-whitelist, только shared secret.
-_METRICS_TOKEN = (os.environ.get("STACK_MCP_METRICS_TOKEN") or "").strip()
-_METRICS_REQUIRE_TOKEN = os.environ.get("STACK_MCP_METRICS_REQUIRE_TOKEN", "false").strip().lower() == "true"
-_METRICS_ACCEPT_UI_BEARER = os.environ.get("STACK_MCP_METRICS_ACCEPT_UI_BEARER", "false").strip().lower() == "true"
-_METRICS_RATE_LIMIT_RPM = max(1, int(os.environ.get("STACK_MCP_METRICS_RATE_LIMIT_RPM", "120")))
+_METRICS_TOKEN = (os.environ.get("SDOCS_MCP_METRICS_TOKEN") or "").strip()
+_METRICS_REQUIRE_TOKEN = os.environ.get("SDOCS_MCP_METRICS_REQUIRE_TOKEN", "false").strip().lower() == "true"
+_METRICS_ACCEPT_UI_BEARER = os.environ.get("SDOCS_MCP_METRICS_ACCEPT_UI_BEARER", "false").strip().lower() == "true"
+_METRICS_RATE_LIMIT_RPM = max(1, int(os.environ.get("SDOCS_MCP_METRICS_RATE_LIMIT_RPM", "120")))
 
 
 class _RateLimiter:
@@ -172,7 +173,7 @@ def _metrics_secret_from_request(req: Request) -> str | None:
     if header.startswith("Bearer "):
         s = header[7:].strip()
         return s or None
-    x = req.headers.get("x-stack-mcp-metrics-token", "").strip()
+    x = req.headers.get("x-sdocs-mcp-metrics-token", "").strip()
     if x:
         return x
     q = req.query_params.get("metrics_token")
@@ -292,11 +293,11 @@ def _rate_limiter_window_stats() -> dict[str, int]:
 
 
 def _cfg() -> AppConfig:
-    path = os.environ.get("STACK_MCP_CONFIG", "")
+    path = os.environ.get("SDOCS_MCP_CONFIG", "")
     if not path or not os.path.isfile(path):
         raise HTTPException(
             status_code=500,
-            detail="Set STACK_MCP_CONFIG to an existing yaml (e.g. config.docker.yaml).",
+            detail="Set SDOCS_MCP_CONFIG to an existing yaml (e.g. config.docker.yaml).",
         )
     return load_config()
 
@@ -366,7 +367,7 @@ def _build_dashboard_stats(cfg: AppConfig) -> dict[str, Any]:
         "collected_at": int(time.time()),
         "data_sources_note": (
             "Факт: health и latency — прямые проверки UI к модулям из конфига; "
-            "обращения — счётчик stack_mcp_ui_requests_total (защищённые /api/*). "
+            "обращения — счётчик sdocs_mcp_ui_requests_total (защищённые /api/*). "
             "Gateway /mcp/*, Nacos, Jira в этой сборке не агрегируются — подключите в проде по описанию заказчика."
         ),
         "summary": {
@@ -452,7 +453,7 @@ def _check_kafka(cfg: AppConfig) -> dict[str, Any]:
         consumer = KafkaConsumer(
             **kafka_broker_client_config(k),
             consumer_timeout_ms=8000,
-            group_id=f"stack-mcp-ui-probe-{int(time.time() * 1000)}",
+            group_id=f"sdocs-mcp-ui-probe-{int(time.time() * 1000)}",
         )
         try:
             topics = sorted(consumer.topics())
@@ -600,10 +601,10 @@ async def health() -> PlainTextResponse:
 @app.get("/ready")
 async def ready() -> JSONResponse:
     """Readiness: конфиг существует и парсится."""
-    path = os.environ.get("STACK_MCP_CONFIG", "")
+    path = os.environ.get("SDOCS_MCP_CONFIG", "")
     if not path or not os.path.isfile(path):
         return JSONResponse(
-            {"status": "not_ready", "detail": "STACK_MCP_CONFIG missing or not a file"},
+            {"status": "not_ready", "detail": "SDOCS_MCP_CONFIG missing or not a file"},
             status_code=503,
         )
     try:
@@ -660,7 +661,7 @@ async def api_config_path(req: Request) -> JSONResponse:
     ok = False
     try:
         _secure_api(req, "config_path")
-        p = os.environ.get("STACK_MCP_CONFIG", "")
+        p = os.environ.get("SDOCS_MCP_CONFIG", "")
         ok = True
         return JSONResponse({"path": p, "exists": bool(p and os.path.isfile(p))})
     finally:
@@ -728,53 +729,53 @@ async def prometheus_metrics(req: Request) -> PlainTextResponse:
         snap = dict(_UI_METRICS)
 
     lines = [
-        "# HELP stack_mcp_ui_up UI process is healthy.",
-        "# TYPE stack_mcp_ui_up gauge",
-        "stack_mcp_ui_up 1",
-        "# HELP stack_mcp_module_up Backend module health check (1=ok).",
-        "# TYPE stack_mcp_module_up gauge",
+        "# HELP sdocs_mcp_ui_up UI process is healthy.",
+        "# TYPE sdocs_mcp_ui_up gauge",
+        "sdocs_mcp_ui_up 1",
+        "# HELP sdocs_mcp_module_up Backend module health check (1=ok).",
+        "# TYPE sdocs_mcp_module_up gauge",
     ]
     for name, st in checks.items():
         value = 1 if st.get("ok") else 0
-        lines.append(f'stack_mcp_module_up{{module="{name}"}} {value}')
+        lines.append(f'sdocs_mcp_module_up{{module="{name}"}} {value}')
         latency = st.get("latency_ms")
         if isinstance(latency, int):
-            lines.append(f'stack_mcp_module_latency_ms{{module="{name}"}} {latency}')
+            lines.append(f'sdocs_mcp_module_latency_ms{{module="{name}"}} {latency}')
 
     lines.extend(
         [
-            "# HELP stack_mcp_ui_requests_total Total secured API requests.",
-            "# TYPE stack_mcp_ui_requests_total counter",
-            f"stack_mcp_ui_requests_total {int(snap.get('requests_total', 0.0))}",
-            "# HELP stack_mcp_ui_auth_failed_total Unauthorized API requests.",
-            "# TYPE stack_mcp_ui_auth_failed_total counter",
-            f"stack_mcp_ui_auth_failed_total {int(snap.get('auth_failed_total', 0.0))}",
-            "# HELP stack_mcp_ui_rate_limited_total Rate-limited API requests.",
-            "# TYPE stack_mcp_ui_rate_limited_total counter",
-            f"stack_mcp_ui_rate_limited_total {int(snap.get('rate_limited_total', 0.0))}",
-            "# HELP stack_mcp_ui_request_errors_total API handler errors.",
-            "# TYPE stack_mcp_ui_request_errors_total counter",
-            f"stack_mcp_ui_request_errors_total {int(snap.get('request_errors_total', 0.0))}",
-            "# HELP stack_mcp_ui_request_latency_seconds_sum Total API handler latency.",
-            "# TYPE stack_mcp_ui_request_latency_seconds_sum counter",
-            f"stack_mcp_ui_request_latency_seconds_sum {snap.get('request_latency_sum_seconds', 0.0):.6f}",
-            "# HELP stack_mcp_ui_request_latency_seconds_count API handler count for latency.",
-            "# TYPE stack_mcp_ui_request_latency_seconds_count counter",
-            f"stack_mcp_ui_request_latency_seconds_count {int(snap.get('request_latency_count', 0.0))}",
-            "# HELP stack_mcp_ui_rate_limiter_events_last_minute Requests observed in in-memory limiter window.",
-            "# TYPE stack_mcp_ui_rate_limiter_events_last_minute gauge",
-            f"stack_mcp_ui_rate_limiter_events_last_minute {limiter['events_last_minute']}",
-            "# HELP stack_mcp_metrics_auth_failed_total Failed /metrics auth attempts.",
-            "# TYPE stack_mcp_metrics_auth_failed_total counter",
-            f"stack_mcp_metrics_auth_failed_total {int(snap.get('metrics_auth_failed_total', 0.0))}",
+            "# HELP sdocs_mcp_ui_requests_total Total secured API requests.",
+            "# TYPE sdocs_mcp_ui_requests_total counter",
+            f"sdocs_mcp_ui_requests_total {int(snap.get('requests_total', 0.0))}",
+            "# HELP sdocs_mcp_ui_auth_failed_total Unauthorized API requests.",
+            "# TYPE sdocs_mcp_ui_auth_failed_total counter",
+            f"sdocs_mcp_ui_auth_failed_total {int(snap.get('auth_failed_total', 0.0))}",
+            "# HELP sdocs_mcp_ui_rate_limited_total Rate-limited API requests.",
+            "# TYPE sdocs_mcp_ui_rate_limited_total counter",
+            f"sdocs_mcp_ui_rate_limited_total {int(snap.get('rate_limited_total', 0.0))}",
+            "# HELP sdocs_mcp_ui_request_errors_total API handler errors.",
+            "# TYPE sdocs_mcp_ui_request_errors_total counter",
+            f"sdocs_mcp_ui_request_errors_total {int(snap.get('request_errors_total', 0.0))}",
+            "# HELP sdocs_mcp_ui_request_latency_seconds_sum Total API handler latency.",
+            "# TYPE sdocs_mcp_ui_request_latency_seconds_sum counter",
+            f"sdocs_mcp_ui_request_latency_seconds_sum {snap.get('request_latency_sum_seconds', 0.0):.6f}",
+            "# HELP sdocs_mcp_ui_request_latency_seconds_count API handler count for latency.",
+            "# TYPE sdocs_mcp_ui_request_latency_seconds_count counter",
+            f"sdocs_mcp_ui_request_latency_seconds_count {int(snap.get('request_latency_count', 0.0))}",
+            "# HELP sdocs_mcp_ui_rate_limiter_events_last_minute Requests observed in in-memory limiter window.",
+            "# TYPE sdocs_mcp_ui_rate_limiter_events_last_minute gauge",
+            f"sdocs_mcp_ui_rate_limiter_events_last_minute {limiter['events_last_minute']}",
+            "# HELP sdocs_mcp_metrics_auth_failed_total Failed /metrics auth attempts.",
+            "# TYPE sdocs_mcp_metrics_auth_failed_total counter",
+            f"sdocs_mcp_metrics_auth_failed_total {int(snap.get('metrics_auth_failed_total', 0.0))}",
         ]
     )
 
     if queue.get("ok"):
         lines.extend(
             [
-                "# HELP stack_mcp_kafka_retained_messages Approx retained messages by topic (end-begin).",
-                "# TYPE stack_mcp_kafka_retained_messages gauge",
+                "# HELP sdocs_mcp_kafka_retained_messages Approx retained messages by topic (end-begin).",
+                "# TYPE sdocs_mcp_kafka_retained_messages gauge",
             ]
         )
         topics = queue.get("topics", {})
@@ -783,14 +784,14 @@ async def prometheus_metrics(req: Request) -> PlainTextResponse:
                 if isinstance(tdata, dict):
                     retained = tdata.get("retained_messages")
                     if isinstance(retained, int):
-                        lines.append(f'stack_mcp_kafka_retained_messages{{topic="{topic}"}} {retained}')
+                        lines.append(f'sdocs_mcp_kafka_retained_messages{{topic="{topic}"}} {retained}')
         total_retained = queue.get("total_retained_messages")
         if isinstance(total_retained, int):
             lines.append(
-                "# HELP stack_mcp_kafka_retained_messages_total Sum retained messages over allowlisted topics."
+                "# HELP sdocs_mcp_kafka_retained_messages_total Sum retained messages over allowlisted topics."
             )
-            lines.append("# TYPE stack_mcp_kafka_retained_messages_total gauge")
-            lines.append(f"stack_mcp_kafka_retained_messages_total {total_retained}")
+            lines.append("# TYPE sdocs_mcp_kafka_retained_messages_total gauge")
+            lines.append(f"sdocs_mcp_kafka_retained_messages_total {total_retained}")
 
     return PlainTextResponse("\n".join(lines) + "\n", media_type="text/plain; version=0.0.4")
 
@@ -892,7 +893,7 @@ async def api_seed(req: Request) -> JSONResponse:
                     with conn.cursor() as cur:
                         cur.execute(
                             "INSERT INTO demo_ping (msg) VALUES (%s) RETURNING id, created_at;",
-                            ("seed from stack-mcp-ui",),
+                            ("seed from sdocs-mcp-ui",),
                         )
                         row = cur.fetchone()
                     conn.commit()
@@ -918,7 +919,7 @@ async def api_seed(req: Request) -> JSONResponse:
             try:
                 m = cfg.modules.opensearch
                 client = connect_opensearch(m)
-                doc = {"event": "seed", "ts": time.time(), "source": "stack-mcp-ui"}
+                doc = {"event": "seed", "ts": time.time(), "source": "sdocs-mcp-ui"}
                 resp = client.index(
                     index="demo-mcp",
                     id=f"seed-{int(time.time())}",
@@ -938,7 +939,7 @@ async def api_seed(req: Request) -> JSONResponse:
 
         if cfg.modules.kafka.enabled and cfg.modules.kafka.allow_produce:
             try:
-                from stack_mcp.kafka_tools import kafka_produce
+                from sdocs_mcp.kafka_tools import kafka_produce
 
                 payload = json.dumps({"event": "seed", "ts": time.time()}, ensure_ascii=False)
                 report["kafka"] = json.loads(
@@ -1025,48 +1026,15 @@ async def api_postgres_allowlist(req: Request) -> JSONResponse:
         _record_request_timing(started, ok)
 
 
-_OPS_HTML = """<!DOCTYPE html>
+_OPS_HTML_RAW = """<!DOCTYPE html>
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>stack-mcp — консоль</title>
+  <title>sdocs-mcp — консоль</title>
   <style>
-    :root {
-      --bg: #020304;
-      --surface: #080b10;
-      --surface2: #0d0f16;
-      --text: #eef3ff;
-      --muted: #8d99ab;
-      --border: #171b23;
-      --accent: #10b981;
-      --accent-soft: rgba(16, 185, 129, 0.14);
-      --ok: #10b981;
-      --ok-bg: rgba(16, 185, 129, 0.12);
-      --bad: #f97316;
-      --bad-bg: rgba(249, 115, 22, 0.12);
-      --skip: #6b7280;
-      --skip-bg: rgba(107, 114, 128, 0.15);
-      --radius: 20px;
-      --radius-sm: 12px;
-      font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    }
-    * { box-sizing: border-box; }
-    body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--text); line-height: 1.55; }
-    .nav-mini { font-size: 12px; margin: 0 0 1rem; }
-    .nav-mini a { color: var(--accent); text-decoration: none; font-weight: 500; }
-    .nav-mini a:hover { text-decoration: underline; }
-    .skip-link {
-      position: absolute;
-      left: -9999px;
-      z-index: 999;
-      padding: 0.5rem 1rem;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      color: var(--text);
-      text-decoration: none;
-    }
-    .skip-link:focus { left: 1rem; top: 1rem; }
+{{TOPNAV_STYLES}}
+{{SUBPAGE_SKIN}}
     .shell { max-width: 1120px; margin: 0 auto; padding: 1.75rem 1.35rem 2.75rem; }
     .page-head {
       padding: 0 0 1.1rem;
@@ -1239,8 +1207,10 @@ _OPS_HTML = """<!DOCTYPE html>
 </head>
 <body>
   <a class="skip-link" href="#main">К основному содержимому</a>
+  <div class="dashboard">
+  {{TOPNAV}}
+  <div class="subpage-content">
   <div class="shell">
-  <p class="nav-mini"><a href="/">Дашборд</a> · <a href="/cron-page">Крон / allowlist</a> · <a href="/status-page">Статус и /metrics</a></p>
   <header class="page-head">
     <h1>Консоль — диагностика и MCP</h1>
     <p class="lede">Токены, статус интеграций, превью Prometheus и отладочные вызовы инструментов. Сводка и модель ROI — на главной странице.</p>
@@ -1253,15 +1223,15 @@ _OPS_HTML = """<!DOCTYPE html>
     <li>
       <p class="step-title">Доступ</p>
       <div class="panel">
-        <p class="muted">Если на сервере задан <code>STACK_MCP_UI_TOKEN</code>, для <code>/api/*</code> нужен Bearer. Для <code>/metrics</code> — <code>STACK_MCP_METRICS_TOKEN</code> или UI-токен при <code>STACK_MCP_METRICS_ACCEPT_UI_BEARER=true</code>.</p>
+        <p class="muted">Если на сервере задан <code>SDOCS_MCP_UI_TOKEN</code>, для <code>/api/*</code> нужен Bearer. Для <code>/metrics</code> — <code>SDOCS_MCP_METRICS_TOKEN</code> или UI-токен при <code>SDOCS_MCP_METRICS_ACCEPT_UI_BEARER=true</code>.</p>
         <p class="muted" id="auth-hint" aria-live="polite"></p>
         <div class="field-group">
           <label class="field-label" for="token">Токен UI / API</label>
-          <input id="token" type="password" placeholder="STACK_MCP_UI_TOKEN (если требуется)" autocomplete="off" />
+          <input id="token" type="password" placeholder="SDOCS_MCP_UI_TOKEN (если требуется)" autocomplete="off" />
         </div>
         <div class="field-group">
           <label class="field-label" for="metrics-token">Токен метрик</label>
-          <input id="metrics-token" type="password" placeholder="STACK_MCP_METRICS_TOKEN (если требуется)" autocomplete="off" />
+          <input id="metrics-token" type="password" placeholder="SDOCS_MCP_METRICS_TOKEN (если требуется)" autocomplete="off" />
         </div>
         <p class="muted" id="cfgpath" aria-live="polite"></p>
       </div>
@@ -1289,7 +1259,7 @@ _OPS_HTML = """<!DOCTYPE html>
 
     <div id="panel-services" role="tabpanel" aria-labelledby="tab-services">
       <h2 class="section-title">Модули в конфиге</h2>
-      <p class="section-note">Что включено в <code>stack_mcp_status</code>: postgres, redis, kafka, prometheus, mail, opensearch, ssh.</p>
+      <p class="section-note">Что включено в <code>sdocs_mcp_status</code>: postgres, redis, kafka, prometheus, mail, opensearch, ssh.</p>
       <div class="row" id="modules-config"></div>
       <h2 class="section-title" style="margin-top:1.25rem;">Доступность интеграций</h2>
       <p class="section-note">Прямые проверки к зависимостям. Сбой здесь обычно важнее, чем вспомогательные счётчики во вкладке «Наблюдение».</p>
@@ -1326,6 +1296,16 @@ _OPS_HTML = """<!DOCTYPE html>
     </div>
   </div>
   </div>
+  </div>
+  <div class="dashboard-footer">
+    <div>SDocsMCP · консоль</div>
+    <div class="theme-switch" id="themeToggle" role="button" tabindex="0" aria-label="Переключить светлую тему">
+      <span>☀</span>
+      <div class="toggle-track"><div class="toggle-thumb"></div></div>
+      <span>☾</span>
+    </div>
+  </div>
+</div>
 
   <script>
     const $ = (id) => document.getElementById(id);
@@ -1445,7 +1425,7 @@ _OPS_HTML = """<!DOCTYPE html>
       await refreshMetricsPreview().catch(() => {});
     }
     const allowed = [
-      'stack_mcp_status','redis_ping','redis_info','redis_dbsize','postgres_connections_overview','postgres_database_sizes',
+      'sdocs_mcp_status','redis_ping','redis_info','redis_dbsize','postgres_connections_overview','postgres_database_sizes',
       'postgres_table_sizes','opensearch_cluster_health','opensearch_rag_policy','opensearch_list_indices','kafka_list_topics',
       'kafka_describe_topic','kafka_consume_recent','ssh_command_policy'
     ];
@@ -1461,16 +1441,16 @@ _OPS_HTML = """<!DOCTYPE html>
       });
     }
     async function boot() {
-      const saved = localStorage.getItem('stack_mcp_ui_token') || '';
+      const saved = localStorage.getItem('sdocs_mcp_ui_token') || '';
       $('token').value = saved;
-      $('token').onchange = () => localStorage.setItem('stack_mcp_ui_token', $('token').value || '');
-      const savedM = localStorage.getItem('stack_mcp_metrics_token') || '';
+      $('token').onchange = () => localStorage.setItem('sdocs_mcp_ui_token', $('token').value || '');
+      const savedM = localStorage.getItem('sdocs_mcp_metrics_token') || '';
       $('metrics-token').value = savedM;
-      $('metrics-token').onchange = () => localStorage.setItem('stack_mcp_metrics_token', $('metrics-token').value || '');
+      $('metrics-token').onchange = () => localStorage.setItem('sdocs_mcp_metrics_token', $('metrics-token').value || '');
       try {
         const ac = await fetch('/api/auth-config').then((r) => r.json());
         if (ac.ui_bearer_enabled) {
-          $('auth-hint').textContent = 'Сейчас: для /api/* нужен Bearer (STACK_MCP_UI_TOKEN).';
+          $('auth-hint').textContent = 'Сейчас: для /api/* нужен Bearer (SDOCS_MCP_UI_TOKEN).';
         } else {
           $('auth-hint').textContent = 'Сейчас: /api/* без Bearer (токен UI на сервере не задан).';
         }
@@ -1479,7 +1459,7 @@ _OPS_HTML = """<!DOCTYPE html>
       }
       try {
         const c = await jget('/api/config-path');
-        $('cfgpath').textContent = 'Конфиг: STACK_MCP_CONFIG=' + (c.path || '(не задан)') + (c.exists ? ' — файл найден' : ' — файл не найден');
+        $('cfgpath').textContent = 'Конфиг: SDOCS_MCP_CONFIG=' + (c.path || '(не задан)') + (c.exists ? ' — файл найден' : ' — файл не найден');
       } catch (e) {
         $('cfgpath').textContent = 'Конфиг: ошибка — ' + e;
       }
@@ -1500,66 +1480,40 @@ _OPS_HTML = """<!DOCTYPE html>
       });
       await refreshMetricsPreview().catch(e => { $('metrics-preview').textContent = String(e); });
     }
+    (function () {
+      const tt = document.getElementById('themeToggle');
+      if (!tt) return;
+      tt.addEventListener('click', function () { document.body.classList.toggle('light'); });
+      tt.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); document.body.classList.toggle('light'); }
+      });
+    })();
     boot();
   </script>
 </body>
 </html>"""
 
-_STATUS_HTML = """<!DOCTYPE html>
+_STATUS_HTML_RAW = """<!DOCTYPE html>
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Статус и /metrics — stack-mcp</title>
+  <title>Статус и /metrics — sdocs-mcp</title>
   <style>
-    :root {
-      color-scheme: light dark;
-      --bg: #f0f2f5;
-      --surface: #ffffff;
-      --text: #1c1d1f;
-      --muted: #5c5f66;
-      --border: rgba(28, 29, 31, 0.12);
-      --accent: #2563eb;
-      --accent-soft: rgba(37, 99, 235, 0.1);
-      --shadow: 0 1px 2px rgba(28, 29, 31, 0.06), 0 4px 12px rgba(28, 29, 31, 0.06);
-      --radius: 12px;
-      --radius-sm: 8px;
-      font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    }
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --bg: #12141a;
-        --surface: #1e222d;
-        --text: #e8eaed;
-        --muted: #9aa0a8;
-        --border: rgba(232, 234, 237, 0.12);
-        --accent: #60a5fa;
-        --accent-soft: rgba(96, 165, 250, 0.15);
-        --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 24px rgba(0, 0, 0, 0.35);
-      }
-    }
-    * { box-sizing: border-box; }
-    body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--text); line-height: 1.55; }
-    .shell { max-width: 1120px; margin: 0 auto; padding: 1.75rem 1.35rem 3rem; }
-    .hero {
-      background: linear-gradient(135deg, var(--surface) 0%, var(--bg) 100%);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 1.25rem 1.4rem;
+{{TOPNAV_STYLES}}
+{{SUBPAGE_SKIN}}
+    .page-hero {
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 1rem;
       margin-bottom: 1.25rem;
-      box-shadow: var(--shadow);
     }
-    .hero h1 { margin: 0 0 0.5rem; font-size: 1.35rem; font-weight: 650; letter-spacing: -0.03em; }
-    .back { margin: 0; }
-    .back a { color: var(--accent); text-decoration: none; font-weight: 500; font-size: 0.9rem; }
-    .back a:hover { text-decoration: underline; text-underline-offset: 3px; }
+    .page-hero h1 { margin: 0; font-size: 1.35rem; font-weight: 600; letter-spacing: -0.02em; }
     .panel {
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: var(--radius);
       padding: 1rem 1.15rem;
       margin-bottom: 1rem;
-      box-shadow: var(--shadow);
     }
     .muted { color: var(--muted); font-size: 0.9rem; margin: 0.4rem 0; }
     code {
@@ -1574,36 +1528,48 @@ _STATUS_HTML = """<!DOCTYPE html>
       padding: 0.55rem 0.75rem;
       border-radius: var(--radius-sm);
       border: 1px solid var(--border);
-      background: var(--bg);
+      background: var(--surface2);
       color: var(--text);
       font-size: 0.9rem;
     }
-    input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+    input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
     pre {
       white-space: pre-wrap;
       word-break: break-word;
-      background: var(--bg);
+      background: var(--surface2);
       padding: 0.85rem 1rem;
       border-radius: var(--radius-sm);
       border: 1px solid var(--border);
       font-size: 0.78rem;
       line-height: 1.45;
       margin: 0;
+      max-height: min(70vh, 560px);
+      overflow: auto;
     }
   </style>
 </head>
 <body>
-  <div class="shell">
-  <header class="hero">
-    <p class="back"><a href="/">← Дашборд</a> · <a href="/ops">Консоль</a> · <a href="/cron-page">Крон / allowlist Postgres</a></p>
+  <div class="dashboard">
+  {{TOPNAV}}
+  <div class="subpage-content">
+  <header class="page-hero">
     <h1>Статус и /metrics</h1>
   </header>
   <div class="panel">
-    <p class="muted">Данные с <code>/metrics</code>. При <code>STACK_MCP_METRICS_TOKEN</code> (или UI Bearer) введите секрет — только заголовок <code>Authorization</code>, не URL.</p>
-    <p class="muted">JSON <code>/api/status</code> — Bearer, если на сервере задан <code>STACK_MCP_UI_TOKEN</code>.</p>
-    <input id="mtok" type="password" placeholder="STACK_MCP_METRICS_TOKEN (если требуется)" autocomplete="off" />
+    <p class="muted">Данные с <code>/metrics</code>. При <code>SDOCS_MCP_METRICS_TOKEN</code> (или UI Bearer) введите секрет — только заголовок <code>Authorization</code>, не URL.</p>
+    <p class="muted">JSON <code>/api/status</code> — Bearer, если на сервере задан <code>SDOCS_MCP_UI_TOKEN</code>.</p>
+    <input id="mtok" type="password" placeholder="SDOCS_MCP_METRICS_TOKEN (если требуется)" autocomplete="off" />
   </div>
   <pre id="out">Loading /metrics...</pre>
+  </div>
+  <div class="dashboard-footer">
+    <div>SDocsMCP · метрики</div>
+    <div class="theme-switch" id="themeToggle" role="button" tabindex="0" aria-label="Переключить светлую тему">
+      <span>☀</span>
+      <div class="toggle-track"><div class="toggle-thumb"></div></div>
+      <span>☾</span>
+    </div>
+  </div>
   </div>
   <script>
     const $ = (id) => document.getElementById(id);
@@ -1616,54 +1582,34 @@ _STATUS_HTML = """<!DOCTYPE html>
       const t = await r.text();
       $('out').textContent = t;
     }
-    $('mtok').value = localStorage.getItem('stack_mcp_metrics_token') || '';
-    $('mtok').onchange = () => localStorage.setItem('stack_mcp_metrics_token', $('mtok').value || '');
+    $('mtok').value = localStorage.getItem('sdocs_mcp_metrics_token') || '';
+    $('mtok').onchange = () => localStorage.setItem('sdocs_mcp_metrics_token', $('mtok').value || '');
     load().catch(e => { $('out').textContent = String(e); });
     setInterval(() => load().catch(() => {}), 15000);
+    (function () {
+      const tt = document.getElementById('themeToggle');
+      if (!tt) return;
+      tt.addEventListener('click', function () { document.body.classList.toggle('light'); });
+      tt.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); document.body.classList.toggle('light'); }
+      });
+    })();
   </script>
 </body>
 </html>
 """
 
-_CRON_HTML = """<!DOCTYPE html>
+_CRON_HTML_RAW = """<!DOCTYPE html>
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>stack-mcp — крон и allowlist Postgres</title>
+  <title>sdocs-mcp — крон и allowlist Postgres</title>
   <style>
-    :root {
-      color-scheme: light dark;
-      --bg: #f4f4f2;
-      --surface: #fdfdfc;
-      --text: #1a1a18;
-      --muted: #5e5e5a;
-      --border: rgba(26, 26, 24, 0.12);
-      --accent: #4a5d66;
-      --accent-soft: rgba(74, 93, 102, 0.14);
-      --radius: 10px;
-      --radius-sm: 6px;
-      font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    }
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --bg: #141413;
-        --surface: #1c1c1a;
-        --text: #e8e8e4;
-        --muted: #9c9c96;
-        --border: rgba(232, 232, 228, 0.1);
-        --accent: #a8b8bf;
-        --accent-soft: rgba(168, 184, 191, 0.18);
-      }
-    }
-    * { box-sizing: border-box; }
-    body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--text); line-height: 1.55; }
-    .shell { max-width: 720px; margin: 0 auto; padding: 1.5rem 1.15rem 2.5rem; }
+{{TOPNAV_STYLES}}
+{{SUBPAGE_SKIN}}
     .page-head { padding-bottom: 1rem; margin-bottom: 1rem; border-bottom: 1px solid var(--border); }
     .page-head h1 { margin: 0 0 0.5rem; font-size: 1.25rem; font-weight: 600; }
-    .nav { font-size: 0.9rem; margin: 0 0 0.75rem; }
-    .nav a { color: var(--accent); text-decoration: none; font-weight: 500; }
-    .nav a:hover { text-decoration: underline; text-underline-offset: 3px; }
     .panel {
       background: var(--surface);
       border: 1px solid var(--border);
@@ -1687,7 +1633,7 @@ _CRON_HTML = """<!DOCTYPE html>
       padding: 0.5rem 0.7rem;
       border-radius: var(--radius-sm);
       border: 1px solid var(--border);
-      background: var(--bg);
+      background: var(--surface2);
       color: var(--text);
       font-size: 0.9rem;
     }
@@ -1708,36 +1654,48 @@ _CRON_HTML = """<!DOCTYPE html>
     pre {
       white-space: pre-wrap;
       word-break: break-word;
-      background: var(--bg);
+      background: var(--surface2);
       padding: 0.75rem 0.9rem;
       border-radius: var(--radius-sm);
       border: 1px solid var(--border);
       font-size: 0.78rem;
       margin: 0.75rem 0 0;
+      max-height: min(60vh, 480px);
+      overflow: auto;
     }
   </style>
 </head>
 <body>
-  <div class="shell">
+  <div class="dashboard">
+  {{TOPNAV}}
+  <div class="subpage-content">
   <header class="page-head">
-    <p class="nav"><a href="/">← Дашборд</a> · <a href="/ops">Консоль</a> · <a href="/status-page">Статус и /metrics</a></p>
     <h1>Крон и именованные запросы Postgres</h1>
-    <p class="muted">В stack-mcp <strong>нет встроенного планировщика</strong>. Внешний крон (systemd, Kubernetes CronJob, CI) вызывает MCP-инструмент <code>postgres_allowlisted_query</code> с аргументом <code>query_id</code>. Текст SQL хранится только в <code>modules.postgres.allowlisted_queries</code> в YAML — клиенты и крон передают лишь id.</p>
+    <p class="muted">В sdocs-mcp <strong>нет встроенного планировщика</strong>. Внешний крон (systemd, Kubernetes CronJob, CI) вызывает MCP-инструмент <code>postgres_allowlisted_query</code> с аргументом <code>query_id</code>. Текст SQL хранится только в <code>modules.postgres.allowlisted_queries</code> в YAML — клиенты и крон передают лишь id.</p>
   </header>
   <div class="panel">
     <p class="muted"><strong>Как пользоваться</strong></p>
     <ol>
       <li>Администратор добавляет в конфиг записи <code>allowlisted_queries</code> с полями <code>id</code>, <code>sql</code>, <code>description</code>, <code>max_rows</code>.</li>
-      <li>Крон вызывает MCP (тот же процесс или отдельный <code>stack-mcp</code>): сначала при необходимости <code>postgres_allowlisted_query_catalog</code>, затем <code>postgres_allowlisted_query</code> с нужным <code>query_id</code>.</li>
-      <li>При <code>STACK_MCP_EMBED_MCP=true</code> Streamable HTTP обычно на <code>/mcp</code> этого же порта, что и UI.</li>
+      <li>Крон вызывает MCP (тот же процесс или отдельный <code>sdocs-mcp</code>): сначала при необходимости <code>postgres_allowlisted_query_catalog</code>, затем <code>postgres_allowlisted_query</code> с нужным <code>query_id</code>.</li>
+      <li>При <code>SDOCS_MCP_EMBED_MCP=true</code> Streamable HTTP обычно на <code>/mcp</code> этого же порта, что и UI.</li>
     </ol>
   </div>
   <div class="panel">
-    <p class="muted">Каталог id (без текста SQL) доступен по <code>GET /api/postgres-allowlist</code> с тем же Bearer, что и для других <code>/api/*</code>, если задан <code>STACK_MCP_UI_TOKEN</code>.</p>
-    <label class="field-label" for="tok">STACK_MCP_UI_TOKEN (если требуется)</label>
+    <p class="muted">Каталог id (без текста SQL) доступен по <code>GET /api/postgres-allowlist</code> с тем же Bearer, что и для других <code>/api/*</code>, если задан <code>SDOCS_MCP_UI_TOKEN</code>.</p>
+    <label class="field-label" for="tok">SDOCS_MCP_UI_TOKEN (если требуется)</label>
     <input id="tok" type="password" placeholder="Bearer для /api/*" autocomplete="off" />
     <button type="button" id="btn">Загрузить каталог query_id</button>
     <pre id="out">Нажмите «Загрузить»…</pre>
+  </div>
+  </div>
+  <div class="dashboard-footer">
+    <div>SDocsMCP · крон / allowlist</div>
+    <div class="theme-switch" id="themeToggle" role="button" tabindex="0" aria-label="Переключить светлую тему">
+      <span>☀</span>
+      <div class="toggle-track"><div class="toggle-thumb"></div></div>
+      <span>☾</span>
+    </div>
   </div>
   </div>
   <script>
@@ -1746,8 +1704,8 @@ _CRON_HTML = """<!DOCTYPE html>
       const t = ($('tok').value || '').trim();
       return t ? { 'Authorization': 'Bearer ' + t } : {};
     }
-    $('tok').value = localStorage.getItem('stack_mcp_ui_token') || '';
-    $('tok').onchange = () => localStorage.setItem('stack_mcp_ui_token', $('tok').value || '');
+    $('tok').value = localStorage.getItem('sdocs_mcp_ui_token') || '';
+    $('tok').onchange = () => localStorage.setItem('sdocs_mcp_ui_token', $('tok').value || '');
     $('btn').onclick = async () => {
       $('out').textContent = '…';
       try {
@@ -1758,16 +1716,28 @@ _CRON_HTML = """<!DOCTYPE html>
         $('out').textContent = String(e);
       }
     };
+    (function () {
+      const tt = document.getElementById('themeToggle');
+      if (!tt) return;
+      tt.addEventListener('click', function () { document.body.classList.toggle('light'); });
+      tt.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); document.body.classList.toggle('light'); }
+      });
+    })();
   </script>
 </body>
 </html>
 """
 
+_OPS_HTML = inject_subpage(_OPS_HTML_RAW, "ops")
+_STATUS_HTML = inject_subpage(_STATUS_HTML_RAW, "status")
+_CRON_HTML = inject_subpage(_CRON_HTML_RAW, "cron")
+
 
 def main() -> None:
     if _METRICS_REQUIRE_TOKEN and not _METRICS_TOKEN:
         raise RuntimeError(
-            "STACK_MCP_METRICS_REQUIRE_TOKEN=true requires non-empty STACK_MCP_METRICS_TOKEN "
+            "SDOCS_MCP_METRICS_REQUIRE_TOKEN=true requires non-empty SDOCS_MCP_METRICS_TOKEN "
             "(use Prometheus scrape authorization or params metrics_token)."
         )
     log = logging.getLogger("uvicorn.error")
@@ -1785,31 +1755,31 @@ def main() -> None:
         _METRICS_ACCEPT_UI_BEARER,
     )
     if not _API_TOKEN:
-        log.warning("STACK_MCP_UI_TOKEN not set: /api/* accepts requests without Bearer (set token to enforce).")
-    host = os.environ.get("STACK_MCP_UI_HOST", "127.0.0.1")
-    port = int(os.environ.get("STACK_MCP_UI_PORT", "8888"))
+        log.warning("SDOCS_MCP_UI_TOKEN not set: /api/* accepts requests without Bearer (set token to enforce).")
+    host = os.environ.get("SDOCS_MCP_UI_HOST", "127.0.0.1")
+    port = int(os.environ.get("SDOCS_MCP_UI_PORT", "8888"))
     if host.strip() in ("0.0.0.0", "[::]", "::"):
         if not _API_TOKEN:
             log.warning(
-                "Listening on all interfaces: /api/* is not Bearer-protected (empty STACK_MCP_UI_TOKEN)."
+                "Listening on all interfaces: /api/* is not Bearer-protected (empty SDOCS_MCP_UI_TOKEN)."
             )
         if not _metrics_auth_required():
             log.warning(
-                "Listening on all interfaces without /metrics authentication; set STACK_MCP_METRICS_TOKEN "
-                "or STACK_MCP_METRICS_ACCEPT_UI_BEARER=true (or STACK_MCP_METRICS_REQUIRE_TOKEN=true)."
+                "Listening on all interfaces without /metrics authentication; set SDOCS_MCP_METRICS_TOKEN "
+                "or SDOCS_MCP_METRICS_ACCEPT_UI_BEARER=true (or SDOCS_MCP_METRICS_REQUIRE_TOKEN=true)."
             )
-    workers = max(1, int(os.environ.get("STACK_MCP_UI_WORKERS", "1")))
-    log_level = (os.environ.get("STACK_MCP_LOG_LEVEL") or "info").strip().lower()
+    workers = max(1, int(os.environ.get("SDOCS_MCP_UI_WORKERS", "1")))
+    log_level = (os.environ.get("SDOCS_MCP_LOG_LEVEL") or "info").strip().lower()
     if workers > 1:
-        log.info("Uvicorn workers=%s (STACK_MCP_UI_WORKERS)", workers)
+        log.info("Uvicorn workers=%s (SDOCS_MCP_UI_WORKERS)", workers)
     if (
         workers > 1
-        and (os.environ.get("STACK_MCP_EMBED_MCP") or "").strip().lower() in ("1", "true", "yes")
-        and (os.environ.get("STACK_MCP_STATELESS_HTTP") or "").strip().lower() not in ("1", "true", "yes", "on")
+        and (os.environ.get("SDOCS_MCP_EMBED_MCP") or "").strip().lower() in ("1", "true", "yes")
+        and (os.environ.get("SDOCS_MCP_STATELESS_HTTP") or "").strip().lower() not in ("1", "true", "yes", "on")
     ):
         log.warning(
-            "STACK_MCP_EMBED_MCP with STACK_MCP_UI_WORKERS>1 can break stateful MCP Streamable HTTP sessions; "
-            "use STACK_MCP_UI_WORKERS=1 or set STACK_MCP_STATELESS_HTTP=true."
+            "SDOCS_MCP_EMBED_MCP with SDOCS_MCP_UI_WORKERS>1 can break stateful MCP Streamable HTTP sessions; "
+            "use SDOCS_MCP_UI_WORKERS=1 or set SDOCS_MCP_STATELESS_HTTP=true."
         )
     run_kw: dict[str, Any] = {
         "host": host,
@@ -1821,9 +1791,9 @@ def main() -> None:
     ssl_kw = resolve_mcp_mtls_uvicorn_kwargs(log)
     if ssl_kw:
         run_kw.update(ssl_kw)
-        log.info("HTTPS + mTLS for UI and embedded /mcp (STACK_MCP_MTLS_*).")
+        log.info("HTTPS + mTLS for UI and embedded /mcp (SDOCS_MCP_MTLS_*).")
     uvicorn.run(
-        "stack_mcp.info_app:app",
+        "sdocs_mcp.info_app:app",
         **run_kw,
     )
 

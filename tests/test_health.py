@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 
 def test_health_ok() -> None:
-    from stack_mcp.info_app import app
+    from sdocs_mcp.info_app import app
 
     with TestClient(app) as client:
         r = client.get("/health")
@@ -14,8 +14,8 @@ def test_health_ok() -> None:
 
 
 def test_ready_without_config_file(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("STACK_MCP_CONFIG", raising=False)
-    from stack_mcp.info_app import app
+    monkeypatch.delenv("SDOCS_MCP_CONFIG", raising=False)
+    from sdocs_mcp.info_app import app
 
     with TestClient(app) as client:
         r = client.get("/ready")
@@ -23,7 +23,7 @@ def test_ready_without_config_file(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_cron_page_ok() -> None:
-    from stack_mcp.info_app import app
+    from sdocs_mcp.info_app import app
 
     with TestClient(app) as client:
         r = client.get("/cron-page")
@@ -34,7 +34,7 @@ def test_cron_page_ok() -> None:
 
 
 def test_executive_dashboard_page_ok() -> None:
-    from stack_mcp.info_app import app
+    from sdocs_mcp.info_app import app
 
     with TestClient(app) as client:
         r = client.get("/dashboard")
@@ -45,8 +45,8 @@ def test_executive_dashboard_page_ok() -> None:
 def test_dashboard_stats_json(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     cfg = tmp_path / "test.yaml"
     cfg.write_text("modules: {}\n", encoding="utf-8")
-    monkeypatch.setenv("STACK_MCP_CONFIG", str(cfg))
-    from stack_mcp.info_app import app
+    monkeypatch.setenv("SDOCS_MCP_CONFIG", str(cfg))
+    from sdocs_mcp.info_app import app
 
     with TestClient(app) as client:
         r = client.get("/api/dashboard-stats")
@@ -60,9 +60,9 @@ def test_dashboard_stats_json(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None
 def test_ready_with_valid_config(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     cfg = tmp_path / "test.yaml"
     cfg.write_text("modules: {}\n", encoding="utf-8")
-    monkeypatch.setenv("STACK_MCP_CONFIG", str(cfg))
+    monkeypatch.setenv("SDOCS_MCP_CONFIG", str(cfg))
     # Import app after env is set so middleware and routes see consistent env for ready()
-    from stack_mcp.info_app import app
+    from sdocs_mcp.info_app import app
 
     with TestClient(app) as client:
         r = client.get("/ready")
