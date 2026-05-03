@@ -27,12 +27,14 @@ stack-mcp-ui
 
 ## Скрипт `scripts/install.sh`
 
-| Режим | Команда |
-|--------|---------|
-| Онлайн, venv `.venv` | `./scripts/install.sh` |
-| Другой каталог venv | `./scripts/install.sh --venv myenv` |
+
+| Режим                             | Команда                                   |
+| --------------------------------- | ----------------------------------------- |
+| Онлайн, venv `.venv`              | `./scripts/install.sh`                    |
+| Другой каталог venv               | `./scripts/install.sh --venv myenv`       |
 | Офлайн (только wheel из каталога) | `./scripts/install.sh --offline ./wheels` |
-| Справка | `./scripts/install.sh --help` |
+| Справка                           | `./scripts/install.sh --help`             |
+
 
 Скрипт сам находит корень проекта: либо рядом лежит `pyproject.toml` (как в минимальной сборке), либо скрипт в `scripts/` и корень на уровень выше.
 
@@ -56,7 +58,7 @@ chmod +x scripts/build-release.sh
 ./scripts/build-release.sh
 ```
 
-В каталоге **`release/`** появятся **три** `.tar.gz` (сами архивы в `.gitignore`, папка и `README` в репозитории):
+В каталоге `**release/**` появятся **три** `.tar.gz` (сами архивы в `.gitignore`, папка и `README` в репозитории):
 
 ### 1. Полная сборка (`stack-mcp-server-full-<version>-<stamp>.tar.gz`)
 
@@ -71,22 +73,24 @@ chmod +x scripts/build-release.sh
 
 Только то, что нужно **поставить и запустить** MCP/UI на сервере:
 
-| Путь | Назначение |
-|------|------------|
-| `src/` | код пакета |
-| `pyproject.toml` | метаданные и зависимости |
-| `README.md` | обзор и быстрый старт |
-| `config.example.yaml` | шаблон конфигурации |
-| `docs/CAPABILITIES.md` | матрица инструментов и лимитов |
-| `wheels/` | зависимости + `pip`, `setuptools`, `wheel` для офлайн-установки |
-| `install.sh` | установщик (копия из репозитория) |
-| `BUNDLE.txt` | краткое описание состава |
+
+| Путь                   | Назначение                                                      |
+| ---------------------- | --------------------------------------------------------------- |
+| `src/`                 | код пакета                                                      |
+| `pyproject.toml`       | метаданные и зависимости                                        |
+| `README.md`            | обзор и быстрый старт                                           |
+| `config.example.yaml`  | шаблон конфигурации                                             |
+| `docs/CAPABILITIES.md` | матрица инструментов и лимитов                                  |
+| `wheels/`              | зависимости + `pip`, `setuptools`, `wheel` для офлайн-установки |
+| `install.sh`           | установщик (копия из репозитория)                               |
+| `BUNDLE.txt`           | краткое описание состава                                        |
+
 
 **Не входит:** тесты, Docker-файлы, CI, демо-compose (их берите из полной сборки при необходимости).
 
 ### 3. Runtime-online (`stack-mcp-server-runtime-online-<version>-<stamp>.tar.gz`)
 
-Тот же состав, что у п. 2, но **без каталога `wheels/`** — никаких заранее скачанных wheel на этапе сборки. Установка только **`./install.sh`** при доступе к **PyPI**. Размер архива намного меньше.
+Тот же состав, что у п. 2, но **без каталога `wheels/`** — никаких заранее скачанных wheel на этапе сборки. Установка только `**./install.sh**` при доступе к **PyPI**. Размер архива намного меньше.
 
 ### Распаковка runtime / runtime-online и установка
 
@@ -115,10 +119,11 @@ python -m stack_mcp --help
 
 ## Гигиена репозитория
 
-В **`.gitignore`**: `release/*.tar.gz`, кэши `.pytest_cache`/`.ruff_cache`, артефакты `dist/`/`build/`, логи в `logs/*.log`. Каталог `logs/` сохраняется с `.gitkeep`.
+В `**.gitignore**`: `release/*.tar.gz`, кэши `.pytest_cache`/`.ruff_cache`, артефакты `dist/`/`build/`, логи в `logs/*.log`. Каталог `logs/` сохраняется с `.gitkeep`.
 
 ## См. также
 
 - [README.md](../README.md) — обзор, переменные окружения, Docker-стенд
 - [CAPABILITIES.md](CAPABILITIES.md) — инструменты MCP и ограничения
 - [deploy/README.md](../deploy/README.md) — продакшен-выкладка
+

@@ -1,0 +1,72 @@
+# Сборка за прокси с логином/паролем без записи секрета в слои образа.
+# Используется BuildKit: секрет один раз монтируется в RUN, в истории слоёв не хранится.
+#
+# 1) Создайте файл с одной строкой URL (без перевода строки в конце по возможности):
+#    printf '%s' 'http://USER:PASSWORD@proxy.example.corp:8080' > build-proxy.url
+#    Символы в пароле: при необходимости URL-encode (@ → %40 и т.д.).
+#
+# 2) Сборка:
+#    DOCKER_BUILDKIT=1 docker build \
+#      --secret id=build_proxy,src=build-proxy.url \
+#      -f deploy/Dockerfile.buildkit-proxy -t stack-mcp-ui:0.3.2 .
+#
+# Обычный Dockerfile без секретов: deploy/Dockerfile
+
+# syntax=docker/dockerfile:1.4
+
+ARG BASE_IMAGE=python:3.12-slim-bookworm
+FROM ${BASE_IMAGE} AS runtime
+
+RUN --mount=type=secret,id=build_proxy \
+  set -eux; \
+  _p="$(tr -d '\n\r' < /run/secrets/build_proxy)"; \
+  export HTTP_PROXY="$_p" HTTPS_PROXY="$_p"; \
+  if command -v apt-get >/dev/null 2>&1; then \
+    apt-get update; \
+    apt-get install -y --no-install-recommends curl; \
+    rm -rf /var/lib/apt/lists/*; \
+  elif command -v microdnf >/dev/null 2>&1; then \
+    microdnf install -y curl; \
+    microdnf clean all; \
+  elif command -v dnf >/dev/null 2>&1; then \
+    dnf install -y curl; \
+    dnf clean all; \
+  else \
+    echo "BASE_IMAGE: нет apt-get/microdnf/dnf." >&2; \
+    exit 1; \
+  fi
+
+RUN set -eux; \
+  if id -u stackmcp >/dev/null 2>&1; then \
+    :; \
+  else \
+    NOLOGIN="$(command -v nologin || true)"; \
+    if [ -z "$NOLOGIN" ]; then NOLOGIN=/bin/false; fi; \
+    useradd --system --uid 10001 --home-dir /app --create-home --shell "$NOLOGIN" stackmcp; \
+  fi
+
+WORKDIR /app
+COPY pyproject.toml README.md ./
+COPY src ./src
+
+RUN --mount=type=secret,id=build_proxy \
+  set -eux; \
+  _p="$(tr -d '\n\r' < /run/secrets/build_proxy)"; \
+  export HTTP_PROXY="$_p" HTTPS_PROXY="$_p"; \
+  pip install --no-cache-dir --upgrade pip \
+  && pip install --no-cache-dir . \
+  && mkdir -p /app/data/logs \
+  && chown -R stackmcp:stackmcp /app
+
+USER stackmcp
+ENV PYTHONUNBUFFERED=1 \
+    STACK_MCP_UI_HOST=0.0.0.0 \
+    STACK_MCP_UI_PORT=8888 \
+    STACK_MCP_EMBED_MCP=true
+
+EXPOSE 8888
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD curl -fsS http://127.0.0.1:8888/health || exit 1
+
+CMD ["stack-mcp-ui"]

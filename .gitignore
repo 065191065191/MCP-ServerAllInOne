@@ -19,6 +19,9 @@ deploy/.env
 # Собранный образ (docker save) — большой бинарник, не коммитить
 deploy/stack-mcp-ui-*.tar
 deploy/stack-mcp-ui-*.tar.gz
+# URL прокси с учётными данными для docker build --secret (не коммитить)
+build-proxy.url
+**/build-proxy.url
 config.yaml
 # Локальные артефакты Playwright, если поднимаете mcp-playwright отдельно
 playwright-browsers/*

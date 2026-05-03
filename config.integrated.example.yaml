@@ -1,5 +1,9 @@
+# Пример «полного» локального стека: RAG в OpenSearch + Kafka + Postgres + Redis.
+# Скопируйте в свой config.yaml или укажите путь через STACK_MCP_CONFIG.
+# Топики Kafka (stack-mcp.events и т.д.) создайте в кластере отдельно, если их ещё нет.
+
 modules:
-  # OpenClaw memory layer (shared RAG in OpenSearch).
+  # Общая память агента (RAG) в OpenSearch.
   opensearch:
     enabled: true
     hosts:
@@ -15,7 +19,7 @@ modules:
     rag:
       enabled: true
       index_allowlist:
-        - openclaw-memory
+        - stack-mcp-agent-memory
       max_text_bytes: 100000
       max_title_bytes: 2048
       max_metadata_json_bytes: 8192
@@ -24,9 +28,9 @@ modules:
       retrieval_size_cap: 12
       allow_delete_by_id: false
       auto_create_index: true
-      source_tag: openclaw-rag
+      source_tag: stack-mcp-rag
 
-  # Event bus for asynchronous workflows.
+  # Шина событий для асинхронных сценариев.
   kafka:
     enabled: true
     bootstrap_servers:
@@ -36,8 +40,8 @@ modules:
     sasl_username: null
     sasl_password: null
     topic_allowlist:
-      - openclaw.events
-      - openclaw.metrics
+      - stack-mcp.events
+      - stack-mcp.metrics
       - prometheus.metrics
     allow_produce: true
     allow_admin: false
@@ -48,7 +52,7 @@ modules:
     produce_max_message_bytes: 131072
     list_topics_max: 200
 
-  # Diagnostics and state snapshots.
+  # Диагностика и снимки состояния.
   postgres:
     enabled: true
     dsn: postgresql://stack:stack@localhost:5432/stack
@@ -74,7 +78,7 @@ modules:
     scan_max_iterations: 10
     scan_count: 100
 
-  # Optional observability. Enable only when Prometheus endpoint is available.
+  # Наблюдаемость. Включайте, когда доступен Prometheus.
   prometheus:
     enabled: false
     base_url: http://localhost:9090
@@ -93,7 +97,7 @@ modules:
     max_series_matches: 500
     kafka_metrics_topic: prometheus.metrics
 
-  # Optional channels for notification / action.
+  # Опционально: уведомления и действия.
   mail:
     enabled: false
     imap_host: localhost
@@ -115,7 +119,7 @@ modules:
     smtp_username_env: null
     smtp_password_env: null
 
-  # Optional remote actions. Keep disabled until host allowlist is curated.
+  # Удалённые действия. Включайте только с готовым allowlist хостов.
   ssh:
     enabled: false
     strict_host_key_checking: false

@@ -1,39 +1,74 @@
 # stack-mcp-server
 
-**Исходный код и релизы:** [github.com/065191065191/MCP-ServerAllInOne](https://github.com/065191065191/MCP-ServerAllInOne) (`git clone` и `git push` — в этот репозиторий).
+Модульный **MCP-сервер** на Python: OpenSearch (включая RAG), Kafka, PostgreSQL, Redis, Prometheus, почта, SSH. В каждом бэкенде — **лимиты и безопасные сценарии** без произвольных опасных операций из коробки.
 
-Единый MCP-сервер (Python) с **включаемыми модулями**: OpenSearch, Kafka, PostgreSQL, Redis, Prometheus (HTTP API + опциональная выгрузка в Kafka). В каждом бэкенде заложены **лимиты и безопасные сценарии** (см. `docs/CAPABILITIES.md`). **Обзор архитектуры одним слайдом:** [`docs/PRODUCT_OVERVIEW.md`](docs/PRODUCT_OVERVIEW.md).
-
-**Браузерный MCP:** в этот пакет не входит. При необходимости поднимайте [mcp-playwright](https://github.com/ma-pony/mcp-playwright) **отдельным** процессом или контейнером и подключайте клиент к его URL.
+**Репозиторий:** [github.com/065191065191/MCP-ServerAllInOne](https://github.com/065191065191/MCP-ServerAllInOne)
 
 ---
 
-## Два процесса
+## Содержание
+
+1. [Обзор проекта и «слайд» с модулями](#обзор-проекта-и-слайд-с-модулями)
+2. [Два процесса и конфигурация](#два-процесса-и-конфигурация)
+3. [Документация](#документация)
+4. [Установка](#установка)
+5. [Закрытый контур, прокси и секреты при `docker build`](#закрытый-контур-прокси-и-секреты-при-docker-build)
+6. [MCP: транспорт, stateless, аудит](#mcp-транспорт-stateless-аудит)
+7. [Запуск MCP (HTTP)](#запуск-mcp-http)
+8. [Веб-UI и один порт с MCP](#веб-ui-и-один-порт-с-mcp)
+9. [Конфигурация модулей (кратко)](#конфигурация-модулей-кратко)
+10. [Docker: демо-стенд](#docker-демо-стенд)
+11. [Безопасный запуск UI](#безопасный-запуск-ui)
+12. [Автор и версия](#автор-и-версия)
+
+---
+
+## Обзор проекта и «слайд» с модулями
+
+Нужна **одна страница**: кто куда ходит, что пишет, как связаны части.
+
+| Где смотреть | Описание |
+|--------------|----------|
+| **[`docs/PRODUCT_OVERVIEW.md`](docs/PRODUCT_OVERVIEW.md)** | Обзор в Markdown + Mermaid (удобно на GitHub). |
+| **[`docs/PRODUCT_OVERVIEW.html`](docs/PRODUCT_OVERVIEW.html)** | **Только для ТОП:** витрина «посмотрели — купили»; без интернета. |
+| **[`docs/PRODUCT_OVERVIEW_SPEAKER_NOTES.html`](docs/PRODUCT_OVERVIEW_SPEAKER_NOTES.html)** | **Только для вас:** конспект, тайминг, Q&amp;A; не слать совету. |
+| **Canvas в Cursor** | Интерактивный одностраничный обзор: файл **`stack-mcp-product-overview.canvas.tsx`** в каталоге canvases проекта IDE (типичный путь Windows: `C:\Users\<user>\.cursor\projects\e-git-mcp-server\canvases\`). Откройте файл в Cursor — панель Canvas рядом с чатом. **В git этот путь обычно не лежит**; дублирует смысл `PRODUCT_OVERVIEW.md`. |
+
+Браузерный MCP в пакет **не входит**; при необходимости — отдельно [mcp-playwright](https://github.com/ma-pony/mcp-playwright).
+
+---
+
+## Два процесса и конфигурация
 
 | Команда | Назначение | Порт по умолчанию |
-|--------|------------|-------------------|
-| `stack-mcp` | Только MCP (HTTP) | `8765`, путь `/mcp` |
-| `stack-mcp-ui` | UI, `/metrics`, опционально встроенный MCP | `8888` |
+|---------|------------|-------------------|
+| `stack-mcp` | Только MCP по HTTP | `8765`, путь `/mcp` |
+| `stack-mcp-ui` | Дашборд, `/metrics`, опционально встроенный MCP | `8888` |
 
-Конфиг: **`STACK_MCP_CONFIG`** → абсолютный путь к YAML (`config.example.yaml`). Для демо с Docker-инфраструктурой — `config.docker.yaml`.
-
-Оркестраторы: **`GET /health`**, **`GET /ready`**. Прод: образы, compose, OpenShift, systemd, безопасность — **[`deploy/README.md`](deploy/README.md)**.
+- **Конфиг:** переменная **`STACK_MCP_CONFIG`** — абсолютный путь к YAML. Шаблоны: **`config.example.yaml`**, демо под Docker: **`config.docker.yaml`**, пример RAG + Kafka + Postgres + Redis: **`config.integrated.example.yaml`**.
+- **Прод:** образы, Compose, OpenShift, systemd — **[`deploy/README.md`](deploy/README.md)**.
+- **Журнал изменений:** [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
-## MCP: транспорт и stateless
+## Документация
 
-- По умолчанию **`STACK_MCP_TRANSPORT=streamable-http`**, URL вида `http(s)://хост:порт/mcp`.
-- **`STACK_MCP_HOST`** по умолчанию `0.0.0.0`. Привязка к `localhost` без **`STACK_MCP_DEV_LOCAL=true`** запрещена.
-- **`STACK_MCP_STATELESS_HTTP=true`** включает **stateless** Streamable HTTP в FastMCP: без серверной сессии между запросами. Нужно при **`STACK_MCP_UI_WORKERS>1`** с **`STACK_MCP_EMBED_MCP=true`**, при **нескольких репликах** за балансировщиком **без** sticky и т.п. Иначе держите **`STACK_MCP_UI_WORKERS=1`** и/или sticky. В ответе **`stack_mcp_status`** есть поле **`stateless_http`**.
+| Документ | Зачем |
+|----------|--------|
+| [`docs/CAPABILITIES.md`](docs/CAPABILITIES.md) | Полная матрица tools и лимитов |
+| [`docs/PRODUCT_OVERVIEW.md`](docs/PRODUCT_OVERVIEW.md) | Архитектура «одним слайдом» (Markdown + Mermaid) |
+| [`docs/PRODUCT_OVERVIEW.html`](docs/PRODUCT_OVERVIEW.html) | HTML для ТОП (витрина) |
+| [`docs/PRODUCT_OVERVIEW_SPEAKER_NOTES.html`](docs/PRODUCT_OVERVIEW_SPEAKER_NOTES.html) | Личный конспект докладчика |
+| [`docs/OFFLINE_AND_PROXY_INSTALL.md`](docs/OFFLINE_AND_PROXY_INSTALL.md) | Закрытый контур, прокси, wheelhouse, секреты BuildKit |
+| [`docs/TOOL_CALL_AUDIT.md`](docs/TOOL_CALL_AUDIT.md) | Аудит вызовов MCP tools в OpenSearch |
+| [`docs/INSTALL_AND_RELEASE.md`](docs/INSTALL_AND_RELEASE.md) | Релизные архивы и установка |
+| [`deploy/README.md`](deploy/README.md) | Промышленный деплой |
 
-Альтернатива: **`STACK_MCP_TRANSPORT=sse`**. **`stdio`** — только с **`STACK_MCP_DEV_LOCAL=true`**.
-
-- **Аудит вызовов tools в OpenSearch:** **`modules.opensearch.tool_call_audit.enabled: true`** (нужен **`opensearch.enabled`**). Десять признаков классификации, **`caller_id`** / опционально **`caller_client_ip`**, полные аргументы и ответ (лимиты настраиваются; по умолчанию до 1M / 5M). Инстанс: **`STACK_MCP_AUDIT_INSTANCE_ID`** или **`instance_id`**; вызывающая сторона: заголовок из **`caller_http_header`**, либо **`STACK_MCP_AUDIT_CALLER_ID`**, либо **`default_caller_id`**. См. **`docs/TOOL_CALL_AUDIT.md`**, **`config.example.yaml`**.
+---
 
 ## Установка
 
-**Вариант A — bash-инсталлятор** (рекомендуется на Linux/macOS/WSL):
+**Вариант A — скрипт** (Linux / macOS / WSL):
 
 ```bash
 chmod +x scripts/install.sh
@@ -50,9 +85,9 @@ source .venv/bin/activate
 pip install -e .
 ```
 
-Скопируйте `config.example.yaml` в `config.yaml` (или задайте `STACK_MCP_CONFIG` на абсолютный путь к файлу) и включите нужные `modules.*.enabled`.
+Скопируйте `config.example.yaml` в `config.yaml` (или укажите путь в `STACK_MCP_CONFIG`) и включите нужные `modules.*.enabled`.
 
-### Релизные архивы (full + runtime с wheels + runtime-online без wheels)
+### Релизные архивы
 
 Из корня репозитория:
 
@@ -67,53 +102,101 @@ chmod +x scripts/build-release.sh
 ./scripts/build-release.sh
 ```
 
-В каталоге **`release/`** появятся три `.tar.gz`: **full**, **runtime** (с предзагруженными `wheels/`) и **runtime-online** (без wheels, только установка через PyPI). См. **`release/README.md`**. Установщик: **`install.sh`** в корне или **`scripts/install.sh`**. Подробности: **[docs/INSTALL_AND_RELEASE.md](docs/INSTALL_AND_RELEASE.md)**.
+В **`release/`** появятся архивы **full**, **runtime** (с `wheels/`) и **runtime-online**. Подробнее: [`release/README.md`](release/README.md), [`docs/INSTALL_AND_RELEASE.md`](docs/INSTALL_AND_RELEASE.md).
 
-## Запуск MCP (только HTTP API)
+---
 
-По умолчанию **`stack-mcp`** слушает **Streamable HTTP** на **`0.0.0.0:8765`**, путь **`/mcp`**. Привязка к **localhost без флага разработки запрещена** — сервис рассчитан на выкладку за reverse proxy / firewall, не на «локальный stdio».
+## Закрытый контур, прокси и секреты при `docker build`
+
+Полная пошаговая инструкция: **[`docs/OFFLINE_AND_PROXY_INSTALL.md`](docs/OFFLINE_AND_PROXY_INSTALL.md)**. Ниже — самое нужное для README.
+
+### Прокси без пароля (build-arg)
+
+```bash
+export HTTP_PROXY=http://proxy.example.corp:8080
+export HTTPS_PROXY=http://proxy.example.corp:8080
+export NO_PROXY=localhost,127.0.0.1,.example.corp
+
+docker build \
+  --build-arg HTTP_PROXY="$HTTP_PROXY" \
+  --build-arg HTTPS_PROXY="$HTTPS_PROXY" \
+  --build-arg NO_PROXY="$NO_PROXY" \
+  -f deploy/Dockerfile \
+  -t stack-mcp-ui:0.3.2 .
+```
+
+### Прокси с логином и паролем (секрет не в слоях образа)
+
+Не передавайте пароль через `--build-arg`. Используйте **BuildKit** и файл с одной строкой URL (файл **`build-proxy.url`** добавлен в `.gitignore`):
+
+```bash
+printf '%s' 'http://USER:PASSWORD@proxy.example.corp:8080' > build-proxy.url
+
+DOCKER_BUILDKIT=1 docker build \
+  --secret id=build_proxy,src=build-proxy.url \
+  -f deploy/Dockerfile.buildkit-proxy \
+  -t stack-mcp-ui:0.3.2 .
+```
+
+Dockerfile: **`deploy/Dockerfile.buildkit-proxy`**. Пример для Compose и **`NO_PROXY` для бэкендов** (OpenSearch, Kafka и т.д.) — в офлайн-доке.
+
+### Перенос в изолированную сеть
+
+На машине со сборкой: `docker save stack-mcp-ui:0.3.2 -o stack-mcp-ui-0.3.2.tar` → перенос → на целевой площадке: `docker load -i ...`.
+
+---
+
+## MCP: транспорт, stateless, аудит
+
+- По умолчанию **`STACK_MCP_TRANSPORT=streamable-http`**, URL вида `http(s)://хост:порт/mcp`.
+- **`STACK_MCP_HOST`** по умолчанию `0.0.0.0`. Привязка к `localhost` без **`STACK_MCP_DEV_LOCAL=true`** запрещена (режим прод за reverse proxy / firewall).
+- **`STACK_MCP_STATELESS_HTTP=true`** — stateless Streamable HTTP (несколько воркеров UI / реплики без sticky). Иначе **`STACK_MCP_UI_WORKERS=1`**. В **`stack_mcp_status`** есть поле **`stateless_http`**.
+- Альтернатива: **`STACK_MCP_TRANSPORT=sse`**. **`stdio`** — только с **`STACK_MCP_DEV_LOCAL=true`**.
+
+**Аудит вызовов tools в OpenSearch:** `modules.opensearch.tool_call_audit.enabled: true` (нужен `opensearch.enabled`): 10 признаков классификации, `caller_id` / опционально IP, аргументы и ответ с лимитами. Подробнее: [`docs/TOOL_CALL_AUDIT.md`](docs/TOOL_CALL_AUDIT.md).
+
+---
+
+## Запуск MCP (HTTP)
 
 ```bash
 export STACK_MCP_CONFIG="$PWD/config.yaml"
-# опционально: SSE вместо Streamable HTTP
-# export STACK_MCP_TRANSPORT=sse
 stack-mcp
-# или: python -m stack_mcp
 ```
 
-Переменные:
-
-| Переменная | Значение по умолчанию | Смысл |
-|------------|----------------------|--------|
+| Переменная | По умолчанию | Смысл |
+|------------|--------------|--------|
 | `STACK_MCP_TRANSPORT` | `streamable-http` | `streamable-http`, `sse` или `stdio` (только с `STACK_MCP_DEV_LOCAL=true`) |
-| `STACK_MCP_HOST` | `0.0.0.0` | `127.0.0.1` / `localhost` / `::1` без `STACK_MCP_DEV_LOCAL=true` — **выход с ошибкой** |
+| `STACK_MCP_HOST` | `0.0.0.0` | `127.0.0.1` / `localhost` / `::1` без dev-флага — ошибка |
 | `STACK_MCP_PORT` | `8765` | Порт HTTP MCP |
-| `STACK_MCP_STATELESS_HTTP` | выкл. | `true` / `1` / `yes` / `on` — stateless Streamable HTTP |
-| `STACK_MCP_DEV_LOCAL` | не задан | `true` — разрешить localhost и stdio **только для отладки** |
+| `STACK_MCP_STATELESS_HTTP` | выкл. | Включить stateless Streamable HTTP |
+| `STACK_MCP_DEV_LOCAL` | — | `true` — localhost и stdio для отладки |
 
-Клиент MCP должен подключаться по URL вида **`https://<хост>/mcp`** (Streamable HTTP) или к эндпоинту SSE — см. документацию вашего клиента к удалённому MCP.
+Инструмент **`stack_mcp_status`** всегда доступен: какие модули включены (без секретов).
 
-### Один порт: веб UI + MCP (Docker / `stack-mcp-ui`)
+---
 
-Если задано **`STACK_MCP_EMBED_MCP=true`**, процесс **`stack-mcp-ui`** отдаёт Streamable HTTP MCP на **`http://<хост>:<STACK_MCP_UI_PORT>/mcp`** (тот же порт, что UI и `/metrics`). Отдельный **`stack-mcp`** на 8765 не обязателен. Либо **`STACK_MCP_UI_WORKERS=1`**, либо **`STACK_MCP_STATELESS_HTTP=true`** при большем числе воркеров или реплик без sticky.
+## Веб-UI и один порт с MCP
 
-**stdio и локальный Cursor с subprocess не являются режимом по умолчанию** и намеренно отключены без `STACK_MCP_DEV_LOCAL=true`.
+При **`STACK_MCP_EMBED_MCP=true`** процесс **`stack-mcp-ui`** отдаёт MCP на **`http://<хост>:<порт>/mcp`** на том же порту, что UI и `/metrics`. Либо **`STACK_MCP_UI_WORKERS=1`**, либо **`STACK_MCP_STATELESS_HTTP=true`** при большем числе воркеров или реплик.
 
-## Инструмент `stack_mcp_status`
+**stdio по умолчанию отключён** без `STACK_MCP_DEV_LOCAL=true`.
 
-Всегда зарегистрирован: какие модули **включены** в конфиге (без секретов), плюс **`stateless_http`** для операторов.
+---
 
-## Конфигурация
+## Конфигурация модулей (кратко)
 
-- **PostgreSQL**: только 10 фиксированных диагностических сценариев, без произвольного SQL.
-- **Redis**: встроенный RESP2-клиент (без пакета `redis`); INFO/MEMORY STATS/DBSIZE/SLOWLOG/PING, ограниченное чтение ключей и `SETEX` с лимитами; опциональный `SCAN` по allowlist-префиксам.
-- **Kafka**: топики только из `topic_allowlist`; потребление с лимитами сообщений и байт; produce/admin — отдельными флагами.
-- **Почта (IMAP/SMTP)**: чтение и отправка при `modules.mail.enabled`; пароли через переменные окружения (`imap_password_env` и при необходимости SMTP).
-- **OpenSearch**: базовые инструменты (`health`, `indices`, `mapping`, `search`, `count`) + расширенная диагностика (`cluster_stats`, `nodes_stats`, `pending_tasks`, `cat_shards`, `allocation_explain`); опционально `password_env` вместо пароля в YAML. Опционально **RAG** (`opensearch.rag`): общая память агента в allowlist-индексах с лимитами (`opensearch_rag_*` tools).
+- **PostgreSQL** — фиксированные диагностические сценарии; произвольный SQL только из YAML (`allowlisted_queries`), клиент передаёт `query_id`.
+- **Redis** — встроенный RESP2-клиент; чтение с лимитами, `SETEX` и опциональный `SCAN` по allowlist.
+- **Kafka** — только топики из `topic_allowlist`; produce/admin отдельными флагами.
+- **Почта** — IMAP/SMTP; пароли через env.
+- **OpenSearch** — cluster/cat/search и опционально **RAG** в allowlist-индексах.
 
-Подробная матрица возможностей и лимитов: `docs/CAPABILITIES.md`.
+Детали: [`docs/CAPABILITIES.md`](docs/CAPABILITIES.md).
 
-## Docker: Kafka, OpenSearch, Postgres, Redis + веб-UI
+---
+
+## Docker: демо-стенд
 
 1. Поднять инфраструктуру:
 
@@ -121,60 +204,43 @@ stack-mcp
 docker compose up -d
 ```
 
-Сервисы на хосте: Postgres `localhost:5432`, Redis `6379`, OpenSearch `http://localhost:9200`, Kafka **bootstrap `localhost:9094`** (внутри сети compose — `kafka:9092`). Топик `demo.events` создаётся job-ом `kafka-init`.
+Postgres `localhost:5432`, Redis `6379`, OpenSearch `http://localhost:9200`, Kafka bootstrap **`localhost:9094`**. Топик `demo.events` создаётся job `kafka-init`.
 
-2. Конфиг MCP для этого стенда: **`config.docker.yaml`**.
+2. Конфиг: **`config.docker.yaml`**.
 
-```bash
-export STACK_MCP_CONFIG="$PWD/config.docker.yaml"
-```
-
-3. Веб-интерфейс (реальные проверки подключений + список MCP tools + вызовы через `FastMCP.call_tool`, без моков):
+3. UI:
 
 ```bash
 source .venv/bin/activate
-pip install -e .
 export STACK_MCP_CONFIG="$PWD/config.docker.yaml"
-# Опционально (по умолчанию UI и /api/* без Bearer):
-# export STACK_MCP_UI_TOKEN="change-me-strong-token"
-# export STACK_MCP_METRICS_TOKEN="change-me-metrics-token"
 stack-mcp-ui
 ```
 
-Откройте [http://127.0.0.1:8888](http://127.0.0.1:8888) — главная это дашборд **MCP Метрики**. Консоль с карточками проверок, превью `/metrics` и **Seed**: [http://127.0.0.1:8888/ops](http://127.0.0.1:8888/ops). Страница «Статус и /metrics»: `/status-page`.
+- Дашборд: [http://127.0.0.1:8888](http://127.0.0.1:8888)
+- Операции: [http://127.0.0.1:8888/ops](http://127.0.0.1:8888/ops)
+- Статус: `/status-page`, метрики: `/metrics`
 
-Чтобы **в том же демо-стенде** поднять MCP по HTTP на ноутбуке (только отладка): `export STACK_MCP_DEV_LOCAL=true STACK_MCP_HOST=127.0.0.1` и в другом терминале `stack-mcp` — эндпоинт `http://127.0.0.1:8765/mcp`.
+Скрипт: **`scripts/run-demo.sh`**.
 
-Скрипт **`scripts/run-demo.sh`** поднимает compose, venv и UI с `config.docker.yaml` (токены по умолчанию выключены; см. комментарии в скрипте).
+Отладочный **`stack-mcp`** на `8765` в том же стенде: `export STACK_MCP_DEV_LOCAL=true STACK_MCP_HOST=127.0.0.1` и в другом терминале `stack-mcp` → `http://127.0.0.1:8765/mcp`.
 
-```bash
-chmod +x scripts/run-demo.sh
-./scripts/run-demo.sh
-```
-
-Для мониторинга:
-
-- `http://127.0.0.1:8888/status-page` — человекочитаемая страница статусов/очередей (подгружает `/metrics`; при включённой защите метрик введите тот же секрет, что в `STACK_MCP_METRICS_TOKEN`, или используйте UI token если задан `STACK_MCP_METRICS_ACCEPT_UI_BEARER=true`).
-- `http://127.0.0.1:8888/metrics` — Prometheus text exposition (scrape endpoint): `stack_mcp_module_up`, latency модулей, `stack_mcp_kafka_retained_messages`, метрики rate-limit/UI.
-
-**Без IP whitelist:** доступ к `/metrics` закрывается shared secret (см. `STACK_MCP_METRICS_*` ниже). Prometheus может передать токен так:
+**Scrape `/metrics` в Prometheus** (предпочтительно Bearer, не светить секрет в URL):
 
 ```yaml
-# предпочтительно: Bearer (не светится в URL)
 authorization:
   type: Bearer
   credentials: "<STACK_MCP_METRICS_TOKEN>"
 ```
 
-Либо query `?metrics_token=...` в `scrape_config.params` — проще, но секрет чаще попадает в прокси-логи.
+Подробнее про токены и лимиты: переменные **`STACK_MCP_METRICS_*`**, **[`deploy/README.md`](deploy/README.md)**.
 
-Для `stack-mcp` и UI задайте `STACK_MCP_CONFIG` на **абсолютный путь** к `config.docker.yaml` или к своему `config.yaml`.
+---
 
 ## Безопасный запуск UI
 
-По умолчанию **`STACK_MCP_UI_TOKEN` не задан** — все `/api/*` доступны **без** Bearer (остаётся rate limit и audit). Чтобы включить проверку заголовка, задайте непустой `STACK_MCP_UI_TOKEN`.
+По умолчанию **`STACK_MCP_UI_TOKEN` не задан** — `/api/*` без Bearer (есть rate limit и audit). Для Bearer-защиты задайте непустой **`STACK_MCP_UI_TOKEN`**.
 
-Минимальный набор переменных:
+Пример переменных:
 
 ```bash
 # export STACK_MCP_UI_TOKEN="change-me-strong-token"
@@ -190,17 +256,12 @@ export STACK_MCP_METRICS_ACCEPT_UI_BEARER="false"
 export STACK_MCP_METRICS_RATE_LIMIT_RPM="120"
 ```
 
-Audit log пишет JSONL-записи по событиям доступа/ошибок/лимитов:
+Журнал UI (JSONL): события `access`, `auth_failed`, `rate_limit`, `mcp_invoke_*`, `seed`, `metrics_*`.
 
-- `access`
-- `auth_failed`
-- `rate_limit`
-- `mcp_invoke_ok` / `mcp_invoke_error`
-- `seed`
-- `metrics_auth_failed` / `metrics_rate_limit`
+---
 
-## Автор и версионирование
+## Автор и версия
 
 **Автор:** Gos Stepan Ulievich.
 
-**Версия** задаётся в `pyproject.toml` (поле `version`), дублируется в `src/stack_mcp/__init__.py` (`__version__`) и в метаданных FastAPI UI (`info_app.py`); теги образов по умолчанию — в `deploy/*`. Текущая версия: **0.3.2**. При каждом осмысленном изменении: поднять версию (патч/минор по [SemVer](https://semver.org/lang/ru/)), обновить `CHANGELOG.md`, зафиксировать изменения коммитом. Описание проекта для пользователей ведётся **только на русском языке** (в первую очередь этот `README.md` и `CHANGELOG.md`).
+Версия: **`pyproject.toml`** → **`src/stack_mcp/__init__.py`** → метаданные UI; теги образов в **`deploy/*`**. Текущая: **0.3.2**. При изменениях — SemVer, обновление **`CHANGELOG.md`**, коммит. Пользовательская документация — **на русском** (`README.md`, `CHANGELOG.md`).

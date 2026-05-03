@@ -1,5 +1,7 @@
 # Промышленная эксплуатация
 
+**Закрытый контур / прокси-шлюз / сборка без интернета:** см. **[`docs/OFFLINE_AND_PROXY_INSTALL.md`](../docs/OFFLINE_AND_PROXY_INSTALL.md)**.
+
 ## Готовый образ (архив)
 
 После локальной сборки в каталоге может лежать **`stack-mcp-ui-0.3.2.tar`** (`docker save`). Файл в `.gitignore` из‑за размера. Импорт на целевой машине:
@@ -35,6 +37,7 @@ docker save stack-mcp-ui:0.3.2 -o deploy/stack-mcp-ui-0.3.2.tar
 | Артефакт | Назначение |
 |----------|------------|
 | `Dockerfile` | Образ: **`stack-mcp-ui`** на **8888**; при **`STACK_MCP_EMBED_MCP=true`** MCP на том же порту, путь **`/mcp`**. |
+| `Dockerfile.buildkit-proxy` | Тот же образ, сборка за **прокси с паролем** через BuildKit `--secret` (см. **`docs/OFFLINE_AND_PROXY_INSTALL.md`** §2.1.1). |
 | `openshift/*.yaml` | Примеры Deployment/Service (при необходимости задайте свой image из реестра). |
 | `docker-compose.prod.yml` | Один сервис, один проброшенный порт (UI + встроенный MCP). |
 | `env.production.example` | Шаблон переменных окружения → скопировать в `deploy/.env`. |

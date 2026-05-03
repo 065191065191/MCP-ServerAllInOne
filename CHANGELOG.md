@@ -3,6 +3,17 @@
 Формат основан на принципах [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/).
 Версии соответствуют [семантическому версионированию](https://semver.org/lang/ru/).
 
+## [Unreleased]
+
+### Добавлено
+
+- **`docs/OFFLINE_AND_PROXY_INSTALL.md`**: сборка и установка в закрытом контуре, через корпоративный HTTP(S)-прокси, перенос `docker save` / wheelhouse; **`NO_PROXY`** для бэкендов; отдельно — доступ к данным через шлюз в `config.yaml`.
+- **`deploy/Dockerfile.buildkit-proxy`**: пример сборки с **прокси Basic URL** через BuildKit `--secret` (без пароля в слоях образа); §2.1.1 в офлайн-доке; **`build-proxy.url`** в `.gitignore`.
+- **`README.md`**: оглавление, блок «слайд» (`PRODUCT_OVERVIEW` + Canvas), таблица документации, прокси/секреты при `docker build`, упорядоченная структура.
+- **`docs/PRODUCT_OVERVIEW.html`**: автономная витрина для совета / ТОП (браузер, без CDN и интернета), с анимацией цепочки вызова; каноническое имя.
+- **`docs/EXECUTIVE_ONEPAGER.html`**: короткий редирект на **`PRODUCT_OVERVIEW.html`** (закладки под старым именем).
+- **`docs/PRODUCT_OVERVIEW_SPEAKER_NOTES.html`**: личный блокнот докладчика (пути, чеклист, тайминг, Q&amp;A, поля для заметок); витрина для ТОП — **`PRODUCT_OVERVIEW.html`**.
+
 ## [0.3.2] — 2026-05-02
 
 ### Добавлено
