@@ -1,12 +1,18 @@
 """Статическая разметка главного дашборда (стиль заказчика); данные — через GET /api/dashboard-stats."""
 
-DASHBOARD_HTML = """<!DOCTYPE html>
+from stack_mcp.ui_nav import inject_top_nav
+
+_DASHBOARD_HTML_RAW = """<!DOCTYPE html>
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>MCP метрики — дашборд</title>
   <style>
+{{TOPNAV_STYLES}}
+    nav.stack-mcp-topnav { border-color: var(--border-light); background: var(--bg-card-light); }
+    nav.stack-mcp-topnav a:not(.is-active) { color: var(--accent-green); }
+    nav.stack-mcp-topnav a.is-active { color: var(--text-primary); }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     :root {
       --bg-primary: #020304;
@@ -124,15 +130,12 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     .theme-switch .toggle-track .toggle-thumb { width: 14px; height: 14px; background: var(--text-primary); border-radius: 14px; position: absolute; top: 2px; left: 2px; transition: 0.2s; }
     body.light .theme-switch .toggle-track .toggle-thumb { left: 20px; }
     .src-banner { font-size: 11px; color: var(--text-muted); margin-top: 8px; max-width: 42rem; line-height: 1.45; }
-    .nav-mini { font-size: 12px; margin-bottom: 8px; }
-    .nav-mini a { color: var(--accent-green); text-decoration: none; }
-    .nav-mini a:hover { text-decoration: underline; }
     @media (max-width: 1100px) { .grid-2col { grid-template-columns: 1fr; } body { padding: 20px; } }
   </style>
 </head>
 <body>
 <div class="dashboard">
-  <p class="nav-mini"><a href="/ops">Консоль</a> · <a href="/cron-page">Крон / allowlist</a> · <a href="/status-page">Статус и /metrics</a></p>
+  {{TOPNAV}}
   <div class="luxury-header">
     <div class="brand">
       <h1>MCP Метрики <span>stack-mcp telemetry</span></h1>
@@ -388,3 +391,5 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 </body>
 </html>
 """
+
+DASHBOARD_HTML = inject_top_nav(_DASHBOARD_HTML_RAW, "dash")

@@ -75,6 +75,7 @@ modules:
     strict_host_key_checking: true
     builtin_safety_filter: true
     allow_shell_operators: false
+    merge_recommended_substring_blocklist: true
     forbidden_substrings:
       - "rm -rf /"
     forbidden_regex: []

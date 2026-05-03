@@ -41,7 +41,7 @@ spec:
         runAsNonRoot: true
       containers:
         - name: stack-mcp-ui
-          image: stack-mcp-ui:0.2.9
+          image: stack-mcp-ui:0.3.0
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

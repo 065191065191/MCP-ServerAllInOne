@@ -11,6 +11,7 @@ from psycopg.rows import dict_row
 
 from stack_mcp.backend_tls import make_postgres_conninfo
 from stack_mcp.config import PostgresModuleConfig
+from stack_mcp.postgres_allowlist_sql import normalize_and_validate_allowlisted_sql
 
 _ALLOWLISTED_QUERY_ID = re.compile(r"^[a-zA-Z][-a-zA-Z0-9_]*$")
 
@@ -18,10 +19,27 @@ _ALLOWLISTED_QUERY_ID = re.compile(r"^[a-zA-Z][-a-zA-Z0-9_]*$")
 def _ensure_db_allowed(cfg: PostgresModuleConfig) -> None:
     info = conninfo_to_dict(cfg.dsn)
     dbname = info.get("dbname") or info.get("database")
-    if cfg.allowed_databases and dbname and dbname not in cfg.allowed_databases:
-        raise PermissionError(
-            f"database {dbname!r} not in allowed_databases {cfg.allowed_databases!r}"
-        )
+    if not dbname:
+        return
+    if cfg.allowed_databases:
+        if dbname not in cfg.allowed_databases:
+            raise PermissionError(
+                f"database {dbname!r} not in allowed_databases {cfg.allowed_databases!r}"
+            )
+        return
+    prefs = [p for p in cfg.allowed_database_prefixes if p and str(p).strip()]
+    if prefs:
+        if not any(dbname.startswith(str(p)) for p in prefs):
+            raise PermissionError(
+                f"database {dbname!r} does not match any allowed_database_prefixes {prefs!r}"
+            )
+        return
+    rx = (cfg.allowed_database_regex or "").strip()
+    if rx:
+        if not re.fullmatch(rx, dbname):
+            raise PermissionError(
+                f"database {dbname!r} does not match allowed_database_regex {rx!r}"
+            )
 
 
 def _connect(cfg: PostgresModuleConfig):
@@ -286,6 +304,7 @@ def postgres_allowlisted_query(cfg: PostgresModuleConfig, query_id: str) -> str:
         raise PermissionError(
             f"query_id {qid!r} not in allowlisted_queries; use postgres_allowlisted_query_catalog"
         )
+    normalize_and_validate_allowlisted_sql(entry.sql)
     max_rows = max(1, min(entry.max_rows, 10_000))
     with _connect(cfg) as conn:
         with conn.cursor() as cur:

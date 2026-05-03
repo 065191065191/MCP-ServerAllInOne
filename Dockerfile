@@ -1,5 +1,5 @@
 ﻿# См. deploy/Dockerfile — канонический прод-образ (UI + бинарники MCP).
-# Сборка из корня: docker build -f deploy/Dockerfile -t stack-mcp:0.2.9 .
+# Сборка из корня: docker build -f deploy/Dockerfile -t stack-mcp:0.3.0 .
 
 FROM python:3.12-slim-bookworm
 
@@ -18,7 +18,7 @@ RUN pip install --no-cache-dir --upgrade pip \
 
 USER stackmcp
 LABEL org.opencontainers.image.title="stack-mcp-server"
-LABEL org.opencontainers.image.version="0.2.9"
+LABEL org.opencontainers.image.version="0.3.0"
 
 # Опционально при запуске контейнера: STACK_MCP_STATELESS_HTTP=true — см. README.
 ENV PYTHONUNBUFFERED=1 \

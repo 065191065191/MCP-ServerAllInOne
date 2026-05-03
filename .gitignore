@@ -20,6 +20,5 @@ deploy/.env
 deploy/stack-mcp-ui-*.tar
 deploy/stack-mcp-ui-*.tar.gz
 config.yaml
-# Vendored Chromium для Playwright (см. playwright-browsers/README.md)
+# Локальные артефакты Playwright, если поднимаете mcp-playwright отдельно
 playwright-browsers/*
-!playwright-browsers/README.md

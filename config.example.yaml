@@ -74,7 +74,13 @@ modules:
   postgres:
     enabled: false
     dsn: postgresql://user:pass@localhost:5432/dbname
+    # Имя БД из dsn: либо явный список, либо префиксы, либо одно regex — не комбинируйте список и префиксы.
+    # Пустой allowed_databases + пустые префиксы + пустой regex = только то имя БД, что в dsn (без перечисления 50 БД).
     allowed_databases: []
+    # Если allowed_databases пуст: все БД на сервере с общим префиксом имени, например tenant_.
+    allowed_database_prefixes: []
+    # Если оба списка пусты: одно выражение re.fullmatch() на имя БД из dsn, например "^app_[0-9]+$"
+    allowed_database_regex: null
     schema_allowlist:
       - public
     statement_timeout_seconds: 25
@@ -88,6 +94,7 @@ modules:
     #     description: Проверка соединения
     #     max_rows: 5
     #     sql: SELECT 1 AS ok
+    # Клиентский mTLS к Postgres (crt + key + CA): все три файла или ни одного. sslmode=verify-full в коде.
     mtls_cert_file: null
     mtls_key_file: null
     mtls_root_ca_file: null
@@ -146,6 +153,8 @@ modules:
     allow_shell_operators: false
     # Встроенные regex: sudo/reboot/dd/curl/wget/perl|python|ruby -c|-e, eval, chmod 777, > /dev/sd*…
     builtin_safety_filter: true
+    # К forbidden_substrings добавляется рекомендованный набор среднего риска (rm -rf, /etc/shadow, …).
+    merge_recommended_substring_blocklist: true
     forbidden_substrings:
       - "rm -rf /"
       - "mkfs"

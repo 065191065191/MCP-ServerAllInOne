@@ -124,6 +124,7 @@ modules:
     max_output_bytes: 262144
     allow_shell_operators: false
     builtin_safety_filter: true
+    merge_recommended_substring_blocklist: true
     forbidden_substrings:
       - "rm -rf /"
       - "mkfs"

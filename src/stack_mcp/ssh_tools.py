@@ -21,11 +21,34 @@ _BUILTIN_SAFETY: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"(?i)\bshred\b"), "shred"),
     (re.compile(r"(?i)\b(curl|wget)\b"), "curl/wget"),
     (re.compile(r"(?i)\b(?:python3?|perl|ruby)\s+-(?:c|e)\b"), "inline script (-c/-e)"),
+    (re.compile(r"(?i)\b(?:bash|sh)\s+-c\b"), "shell -c inline"),
     (re.compile(r"(?i)\bbase64\s+(?:-d|--decode)\b"), "base64 decode pipe trick"),
     (re.compile(r"(?i)\beval\s+"), "eval"),
     (re.compile(r"(?i)[>|]\s*/dev/(?:sd|nvme|vd|hd|mmcblk)"), "redirect to block device"),
     (re.compile(r"(?i)\bchmod\b.*\b777\b"), "chmod to 777"),
+    (re.compile(r"(?i)>\s*/etc/\S"), "redirect into /etc"),
+    (re.compile(r"(?i)\bchown\s+"), "chown"),
+    (re.compile(r"(?i)\bchgrp\s+"), "chgrp"),
+    (re.compile(r"(?i)\brm\s+-\w*"), "rm with destructive flags"),
+    (re.compile(r"(?i)\b(userdel|groupdel)\b"), "account/group deletion"),
+    (re.compile(r"(?i)\b(?:nc|netcat)\b.+?\s-[lL]\b"), "netcat listen"),
 ]
+
+# Подмешивается при merge_recommended_substring_blocklist=true (средний риск; жёсткий слой — _BUILTIN_SAFETY).
+_RECOMMENDED_SUBSTRING_BLOCKLIST: tuple[str, ...] = (
+    "rm -rf",
+    "/etc/shadow",
+    "/etc/sudoers",
+    "> /etc/",
+    "chmod 000",
+    "chmod 4777",
+    "mkfs.",
+    "fdisk",
+    "wipefs",
+    "iptables",
+    "nft flush",
+    "systemctl daemon-reexec",
+)
 
 
 def ssh_command_policy(cfg: SshModuleConfig) -> str:
@@ -33,10 +56,12 @@ def ssh_command_policy(cfg: SshModuleConfig) -> str:
     body: dict[str, Any] = {
         "from_config": {
             "forbidden_substrings": list(cfg.forbidden_substrings),
+            "merge_recommended_substring_blocklist": cfg.merge_recommended_substring_blocklist,
             "forbidden_regex": list(cfg.forbidden_regex),
             "allow_shell_operators": cfg.allow_shell_operators,
             "builtin_safety_filter": cfg.builtin_safety_filter,
         },
+        "recommended_substrings_when_merge_enabled": list(_RECOMMENDED_SUBSTRING_BLOCKLIST),
         "enforced_in_code": {
             "max_command_length_chars": 16_384,
             "empty_command_rejected": True,
@@ -95,9 +120,14 @@ def _validate_command(cfg: SshModuleConfig, command: str) -> None:
         raise ValueError("command too long (max 16384 characters)")
 
     lower = cmd.lower()
-    for sub in cfg.forbidden_substrings:
-        if not sub:
-            continue
+    effective_substrings = [s for s in cfg.forbidden_substrings if s]
+    if cfg.merge_recommended_substring_blocklist:
+        have = {s.lower() for s in effective_substrings}
+        for s in _RECOMMENDED_SUBSTRING_BLOCKLIST:
+            if s.lower() not in have:
+                effective_substrings.append(s)
+                have.add(s.lower())
+    for sub in effective_substrings:
         if sub.lower() in lower:
             raise ValueError(f"Command blocked: forbidden substring matches {sub!r}")
 

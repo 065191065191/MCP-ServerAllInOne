@@ -29,6 +29,16 @@ def test_validate_rejects_delete_after_with() -> None:
         normalize_and_validate_allowlisted_sql("WITH x AS (SELECT 1) DELETE FROM t")
 
 
+def test_validate_rejects_vacuum() -> None:
+    with pytest.raises(ValueError, match="forbidden"):
+        normalize_and_validate_allowlisted_sql("WITH t AS (SELECT 1) VACUUM pg_catalog.pg_class")
+
+
+def test_validate_rejects_pg_sleep() -> None:
+    with pytest.raises(ValueError, match="forbidden function"):
+        normalize_and_validate_allowlisted_sql("SELECT pg_sleep(1)")
+
+
 def test_validate_rejects_semicolon_in_middle() -> None:
     with pytest.raises(ValueError, match="unquoted semicolon"):
         normalize_and_validate_allowlisted_sql("SELECT 1; SELECT 2")

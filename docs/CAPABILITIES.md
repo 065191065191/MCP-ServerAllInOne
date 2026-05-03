@@ -11,7 +11,7 @@
 | Tool | Описание |
 |------|----------|
 | `stack_mcp_status` | JSON с флагами включённых модулей. |
-| `ssh_command_policy` | JSON: политика `ssh_run_command` — `forbidden_substrings`, `forbidden_regex`, `allow_shell_operators`, `builtin_safety_filter`, лимит длины, правила на shell-операторы и список встроенных regex (`ssh_tools._BUILTIN_SAFETY`), если встроенный фильтр включён. |
+| `ssh_command_policy` | JSON: политика `ssh_run_command` — `forbidden_substrings`, **`merge_recommended_substring_blocklist`**, `forbidden_regex`, `allow_shell_operators`, `builtin_safety_filter`, лимит длины, правила на shell-операторы и список встроенных regex (`ssh_tools._BUILTIN_SAFETY`), если встроенный фильтр включён. |
 
 ## PostgreSQL (`modules.postgres`)
 
@@ -34,7 +34,7 @@
 
 Правила для записей `allowlisted_queries`: один оператор; только **SELECT** или **WITH …** (read-only); запрещены DML/DDL и ключевое слово **INTO**; размер текста SQL ограничен; `id` — `[a-zA-Z][-a-zA-Z0-9_]*`; дубликаты `id` недопустимы.
 
-Лимиты конфигурации: `statement_timeout_seconds`, `long_query_limit`, `top_n_tables`, список `schema_allowlist`, опционально `allowed_databases` для проверки имени БД из DSN.
+Лимиты конфигурации: `statement_timeout_seconds`, `long_query_limit`, `top_n_tables`, список `schema_allowlist`, опционально ограничение имени БД из DSN: **`allowed_databases`**, **`allowed_database_prefixes`** или **`allowed_database_regex`** (см. валидатор в `config.py`).
 
 ## Redis (`modules.redis`)
 

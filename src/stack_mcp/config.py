@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import re
 from pathlib import Path
-from typing import Self
+from typing import Literal, Self
 
 import yaml
 from pydantic import BaseModel, Field, model_validator
@@ -87,6 +87,37 @@ class ModuleClientMtlsMixin(BaseModel):
         return self
 
 
+class OpenSearchSearchAuditLogConfig(BaseModel):
+    """Опционально: фиксировать запросы search/count в отдельном индексе для статистики и разборов (несколько MCP — каждый пишет со своим uuid)."""
+
+    enabled: bool = False
+    index: str = "stack-mcp-search-audit"
+    max_query_json_chars: int = 8000
+    max_hits_preview: int = 5
+    max_source_chars_per_hit: int = 2000
+
+    @model_validator(mode="after")
+    def _audit_index_ok(self) -> Self:
+        if not self.enabled:
+            return self
+        idx = self.index.strip()
+        if not idx or len(idx) > 255:
+            raise ValueError(
+                "opensearch.search_audit_log: при enabled=true задайте непустой index (до 255 символов)"
+            )
+        if any(ch in idx for ch in ("*", "?", " ", ",")):
+            raise ValueError(
+                "opensearch.search_audit_log.index: недопустимы символы *, ?, пробел, запятая"
+            )
+        if self.max_query_json_chars < 500 or self.max_query_json_chars > 100_000:
+            raise ValueError("opensearch.search_audit_log.max_query_json_chars: допустимо 500..100000")
+        if self.max_hits_preview < 0 or self.max_hits_preview > 50:
+            raise ValueError("opensearch.search_audit_log.max_hits_preview: допустимо 0..50")
+        if self.max_source_chars_per_hit < 200 or self.max_source_chars_per_hit > 50_000:
+            raise ValueError("opensearch.search_audit_log.max_source_chars_per_hit: допустимо 200..50000")
+        return self
+
+
 class OpenSearchModuleConfig(ModuleClientMtlsMixin):
     enabled: bool = False
     hosts: list[str] = Field(default_factory=lambda: ["https://localhost:9200"])
@@ -100,6 +131,7 @@ class OpenSearchModuleConfig(ModuleClientMtlsMixin):
     search_max_size: int = 50
     allow_write: bool = False
     rag: OpenSearchRagConfig = Field(default_factory=OpenSearchRagConfig)
+    search_audit_log: OpenSearchSearchAuditLogConfig = Field(default_factory=OpenSearchSearchAuditLogConfig)
 
     @model_validator(mode="after")
     def _rag_requires_opensearch(self) -> Self:
@@ -149,7 +181,12 @@ class PostgresAllowlistedQuery(BaseModel):
 class PostgresModuleConfig(ModuleClientMtlsMixin):
     enabled: bool = False
     dsn: str = "postgresql://user:pass@localhost:5432/dbname"
+    # Пустой список = не ограничивать имя БД (достаточно dsn). Иначе только перечисленные имена.
     allowed_databases: list[str] = Field(default_factory=list)
+    # Если allowed_databases пуст: можно задать префиксы имён БД (например tenant_) вместо списка из 50 имён.
+    allowed_database_prefixes: list[str] = Field(default_factory=list)
+    # Если оба списка пусты: опционально одно регулярное выражение (re.fullmatch) на имя БД из dsn.
+    allowed_database_regex: str | None = None
     schema_allowlist: list[str] = Field(default_factory=lambda: ["public"])
     statement_timeout_seconds: int = 25
     long_query_limit: int = 20
@@ -158,9 +195,21 @@ class PostgresModuleConfig(ModuleClientMtlsMixin):
         default_factory=list,
         description="Разрешённые по id запросы для postgres_allowlisted_query / каталога",
     )
+    # Только если заданы все три mtls_* у postgres: режим libpq для проверки TLS сервера (сертификат клиента опционален — без файлов mTLS не включается).
+    mtls_sslmode: Literal["require", "verify-ca", "verify-full"] = "verify-ca"
 
     @model_validator(mode="after")
     def _validate_postgres_allowlist(self) -> Self:
+        rx = (self.allowed_database_regex or "").strip()
+        if rx:
+            try:
+                re.compile(rx)
+            except re.error as e:
+                raise ValueError(f"postgres.allowed_database_regex invalid: {e}") from e
+        if self.allowed_databases and self.allowed_database_prefixes:
+            raise ValueError(
+                "postgres: задайте либо allowed_databases, либо allowed_database_prefixes, не оба сразу"
+            )
         if not self.allowlisted_queries:
             return self
         ids = [q.id for q in self.allowlisted_queries]
@@ -270,6 +319,8 @@ class SshModuleConfig(BaseModel):
     default_private_key_path: str | None = None
     # Подстроки (без учёта регистра): если входят в команду — выполнение запрещено.
     forbidden_substrings: list[str] = Field(default_factory=list)
+    # Подмешать рекомендованный набор «средней опасности» (rm -rf, /etc/shadow, …) к forbidden_substrings.
+    merge_recommended_substring_blocklist: bool = True
     # Регулярные выражения (Python re): любое совпадение — запрет.
     forbidden_regex: list[str] = Field(default_factory=list)
     # Если false — отклонять команды с ; | && || переносами, обратными кавычками, $( ... ).

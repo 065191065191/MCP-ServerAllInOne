@@ -6,13 +6,30 @@ import re
 MAX_ALLOWLISTED_SQL_BYTES = 32_768
 
 # Запрещены конструкции записи и DDL; отдельно режем INTO (SELECT INTO / CREATE … AS).
+# VACUUM/REINDEX/CLUSTER и т.п. — не read-only; NOTIFY — побочный эффект.
 _FORBIDDEN = re.compile(
     r"\b("
     r"INSERT|UPDATE|DELETE|MERGE|TRUNCATE|DROP|ALTER|CREATE|GRANT|REVOKE|"
     r"COPY|CALL|EXECUTE|DO|LISTEN|NOTIFY|PREPARE|"
-    r"SET\s+ROLE|SET\s+SESSION\s+AUTHORIZATION"
+    r"SET\s+ROLE|SET\s+SESSION\s+AUTHORIZATION|"
+    r"VACUUM|CLUSTER|REINDEX|DISCARD\s+ALL|RESET\s+ALL|"
+    r"LOCK\s+TABLE|LOCK\s+DATABASE|LOCK\s+SCHEMA|"
+    r"REFRESH\s+MATERIALIZED\s+VIEW|"
+    r"COMMENT\s+ON|SECURITY\s+LABEL|"
+    r"IMPORT\s+FOREIGN\s+SCHEMA|"
+    r"ALTER\s+SYSTEM"
     r")\b",
     re.IGNORECASE | re.DOTALL,
+)
+
+# Опасные функции / расширения в read-only allowlist не допускаем.
+_FORBIDDEN_FUNCTIONS = re.compile(
+    r"\b("
+    r"pg_read_file|pg_read_binary_file|pg_ls_dir|lo_import|lo_export|"
+    r"dblink_connect|dblink_exec|dblink_open|"
+    r"pg_sleep|pg_advisory_lock|pg_advisory_xact_lock"
+    r")\s*\(",
+    re.IGNORECASE,
 )
 
 _INTO_FORBIDDEN = re.compile(r"\bINTO\b", re.IGNORECASE)
@@ -75,5 +92,7 @@ def normalize_and_validate_allowlisted_sql(sql: str) -> None:
         raise ValueError("allowlisted sql must start with SELECT or WITH")
     if _FORBIDDEN.search(core):
         raise ValueError("allowlisted sql contains a forbidden keyword (DML/DDL/etc.)")
+    if _FORBIDDEN_FUNCTIONS.search(core):
+        raise ValueError("allowlisted sql contains a forbidden function call")
     if _INTO_FORBIDDEN.search(core):
         raise ValueError("allowlisted sql must not contain INTO")

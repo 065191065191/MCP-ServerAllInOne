@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "stack-mcp-server"
-version = "0.2.9"
-description = "MCP по HTTP: модули данных и опциональный браузерный MCP (mcp-playwright)"
+version = "0.3.0"
+description = "MCP по HTTP: модули данных (OpenSearch, Kafka, Postgres, Redis, Prometheus, SSH, почта)"
 readme = "README.md"
 authors = [{ name = "Gos Stepan Ulievich" }]
 requires-python = ">=3.11"
@@ -20,13 +20,11 @@ dependencies = [
   "uvicorn[standard]>=0.31.0",
   "httpx>=0.27.0",
   "paramiko>=3.4.0",
-  "mcp-playwright>=0.1.1,<0.2",
 ]
 
 [project.scripts]
 stack-mcp = "stack_mcp.server:main"
 stack-mcp-ui = "stack_mcp.info_app:main"
-stack-mcp-playwright = "stack_mcp.playwright_http:main"
 
 [project.optional-dependencies]
 dev = [

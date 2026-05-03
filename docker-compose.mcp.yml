@@ -5,7 +5,7 @@ services:
     build:
       context: .
       dockerfile: deploy/Dockerfile
-    image: stack-mcp-ui:0.2.9
+    image: stack-mcp-ui:0.3.0
     restart: unless-stopped
     environment:
       STACK_MCP_CONFIG: /etc/stack-mcp/config.yaml

@@ -3,6 +3,24 @@
 Формат основан на принципах [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/).
 Версии соответствуют [семантическому версионированию](https://semver.org/lang/ru/).
 
+## [0.3.0] — 2026-05-03
+
+### Добавлено
+
+- **`stack_mcp.ui_nav`**: единая верхняя навигация веб-UI (инжект в HTML дашборда).
+- Postgres: ограничение имён БД из DSN — **`allowed_databases`**, **`allowed_database_prefixes`** или **`allowed_database_regex`** (взаимоисключение с префиксами/списком по правилам валидатора).
+- SSH: флаг **`merge_recommended_substring_blocklist`** и рекомендованный набор подстрок; расширен встроенный слой **`_BUILTIN_SAFETY`**.
+- Тесты: политика имён БД Postgres (`tests/test_postgres_database_policy.py`), доработки SSH и allowlist SQL.
+
+### Удалено
+
+- Встроенная обёртка **`stack-mcp-playwright`** (`playwright_http.py`), зависимость **`mcp-playwright`**, Docker/документация и скрипты vendor Chromium под этот сценарий. Браузерный MCP при необходимости запускайте отдельно ([mcp-playwright](https://github.com/ma-pony/mcp-playwright)).
+
+### Изменено
+
+- **`README.md`**, **`pyproject.toml`**: описание пакета без встроенного браузерного MCP.
+- Версия пакета и теги образов по умолчанию — **0.3.0**.
+
 ## [0.2.9] — 2026-05-02
 
 ### Добавлено
