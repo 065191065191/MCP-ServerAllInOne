@@ -1,214 +1,81 @@
-# Copy to config.yaml or set SDOCS_MCP_CONFIG=/path/to/config.yaml
+# Минимальный пример конфига SDocsMCP.
 #
-# MCP процесс (sdocs-mcp): HTTP по умолчанию — SDOCS_MCP_TRANSPORT=streamable-http,
-# SDOCS_MCP_HOST=0.0.0.0, SDOCS_MCP_PORT=8765, путь /mcp. Localhost без SDOCS_MCP_DEV_LOCAL=true запрещён.
-# Stateless Streamable HTTP (несколько воркеров / подов без sticky): переменная процесса SDOCS_MCP_STATELESS_HTTP=true
-# (не поле YAML) — см. README и deploy/README.md.
+# Скопируйте в config.yaml и подставьте свои значения (REPLACE_ME),
+# либо задайте путь через переменную окружения SDOCS_MCP_CONFIG=/абс/путь/config.yaml.
 #
-# mTLS (HTTPS + обязательный клиентский сертификат): только если заданы все три файла —
-#   SDOCS_MCP_MTLS_CERT_FILE, SDOCS_MCP_MTLS_KEY_FILE, SDOCS_MCP_MTLS_ROOT_CA_FILE
-# (серверный CRT, KEY, CA для проверки клиента). Иначе слушаем plain HTTP.
-# Опционально: SDOCS_MCP_MTLS_KEY_PASSWORD — пароль от ключа.
+# В YAML НЕ выполняются подстановки ${VAR}. Если пароль не должен лежать в файле —
+# используйте поля "*_env": приложение возьмёт значение из переменной окружения с этим именем.
 #
-# Клиентский mTLS к Kafka / OpenSearch / Postgres / Redis / Prometheus: в каждом модуле
-# либо все три файла, либо ни одного — mtls_cert_file, mtls_key_file, mtls_root_ca_file
-# (+ опционально mtls_key_password). Иначе — прежнее поведение (plain или как в dsn/url).
-# Redis: при mtls_* в url обязателен протокол rediss://. Kafka: при PLAINTEXT и mtls_* протокол
-# переключается на SSL; при SASL_SSL сертификаты клиента добавляются к SASL.
+# Полный справочник со всеми опциями (mTLS, RAG, аудит, SSH-политики, лимиты) —
+# в deploy/config.production.example.yaml и docs/CAPABILITIES.md.
+#
+# Транспорт MCP по умолчанию: streamable-http, SDOCS_MCP_HOST=0.0.0.0, SDOCS_MCP_PORT=8765, путь /mcp.
+# Для «всё на одном порту» (UI + MCP + /metrics) запускайте sdocs-mcp-ui с SDOCS_MCP_EMBED_MCP=true.
 
 modules:
-  opensearch:
-    enabled: false
-    hosts:
-      - https://localhost:9200
-    use_ssl: true
-    verify_certs: true
-    username: null
-    password: null
-    # Если задано — пароль из переменной окружения (имя переменной, не значение).
-    password_env: null
-    request_timeout_seconds: 30
-    search_max_size: 2000
-    allow_write: false
-    mtls_cert_file: null
-    mtls_key_file: null
-    mtls_root_ca_file: null
-    mtls_key_password: null
-    # RAG-память агента в OpenSearch: только перечисленные индексы, лимиты на размер и объём.
-    rag:
-      enabled: false
-      index_allowlist: []
-      # Пример: [ "agent-memory" ]
-      max_text_bytes: 100000
-      max_title_bytes: 2048
-      max_metadata_json_bytes: 8192
-      max_metadata_keys: 32
-      max_docs_per_index: 50000
-      retrieval_size_cap: 15
-      allow_delete_by_id: false
-      auto_create_index: false
-      source_tag: sdocs-mcp-rag
-    # Журнал вызовов MCP tools в OpenSearch (аргументы, ответ, классификация, длительность).
-    # Нужен opensearch.enabled=true. Идентификатор инстанса: SDOCS_MCP_AUDIT_INSTANCE_ID или instance_id.
-    tool_call_audit:
-      enabled: false
-      index: sdocs-mcp-tool-audit
-      instance_id: ""
-      # Кто вызвал: HTTP-заголовок caller_http_header → SDOCS_MCP_AUDIT_CALLER_ID → default_caller_id → unknown
-      default_caller_id: ""
-      caller_http_header: null
-      # true — писать caller_client_ip из сокета ASGI (за L7-прокси часто IP прокси, не конечный клиент)
-      log_http_client_ip: false
-      max_arguments_json_chars: 1000000
-      max_result_chars: 5000000
-      auto_create_index: true
-      exclude_tools: []
-      # Пример шума: exclude_tools: [ "sdocs_mcp_status" ]
 
+  # ───── OpenSearch ───────────────────────────────────────────────
+  # Зачем: поиск/чтение индексов; опционально RAG-память агента и журнал вызовов tools.
+  opensearch:
+    enabled: true            # включить модуль; false — модуль не подключается
+    hosts:
+      - https://opensearch.internal:9200
+    use_ssl: true            # https в URL обычно требует use_ssl: true
+    verify_certs: true       # выключайте только для отладки c самоподписанным CA
+    username: sdocs_mcp
+    password: REPLACE_ME     # альтернатива: password_env: OPENSEARCH_PASSWORD (взять из ENV)
+
+  # ───── Kafka ────────────────────────────────────────────────────
+  # Зачем: чтение/публикация в разрешённые топики. Без topic_allowlist инструменты не работают.
   kafka:
     enabled: false
     bootstrap_servers:
-      - localhost:9092
-    security_protocol: PLAINTEXT
-    sasl_mechanism: null
-    sasl_username: null
-    sasl_password: null
-    topic_allowlist: []
-    allow_produce: false
-    allow_admin: false
-    consume_max_messages: 200
-    consume_max_bytes: 4194304
-    consume_timeout_seconds: 10
-    produce_max_messages: 50
-    produce_max_message_bytes: 262144
-    list_topics_max: 500
-    mtls_cert_file: null
-    mtls_key_file: null
-    mtls_root_ca_file: null
-    mtls_key_password: null
+      - kafka.internal:9092
+    security_protocol: SASL_PLAINTEXT    # либо SASL_SSL / PLAINTEXT по вашей шине
+    sasl_mechanism: SCRAM-SHA-512
+    sasl_username: sdocs_mcp
+    sasl_password: REPLACE_ME
+    topic_allowlist: []                   # обязательно, иначе ни consume, ни produce
 
+  # ───── PostgreSQL ───────────────────────────────────────────────
+  # Зачем: диагностика и разрешённые SELECT-ы по allowlisted_queries.
   postgres:
     enabled: false
-    dsn: postgresql://user:pass@localhost:5432/dbname
-    # Имя БД из dsn: либо явный список, либо префиксы, либо одно regex — не комбинируйте список и префиксы.
-    # Пустой allowed_databases + пустые префиксы + пустой regex = только то имя БД, что в dsn (без перечисления 50 БД).
-    allowed_databases: []
-    # Если allowed_databases пуст: все БД на сервере с общим префиксом имени, например tenant_.
-    allowed_database_prefixes: []
-    # Если оба списка пусты: одно выражение re.fullmatch() на имя БД из dsn, например "^app_[0-9]+$"
-    allowed_database_regex: null
-    schema_allowlist:
-      - public
-    statement_timeout_seconds: 25
-    long_query_limit: 20
-    top_n_tables: 20
-    # Именованные SELECT только из списка; MCP-клиенты вызывают postgres_allowlisted_query(query_id).
-    allowlisted_queries: []
-    # Пример:
-    # allowlisted_queries:
-    #   - id: health-ping
-    #     description: Проверка соединения
-    #     max_rows: 5
-    #     sql: SELECT 1 AS ok
-    # Клиентский mTLS к Postgres (crt + key + CA): все три файла или ни одного. sslmode=verify-full в коде.
-    mtls_cert_file: null
-    mtls_key_file: null
-    mtls_root_ca_file: null
-    mtls_key_password: null
+    dsn: postgresql://sdocs_mcp:REPLACE_ME@db.internal:5432/observability
 
+  # ───── Redis ────────────────────────────────────────────────────
+  # Зачем: чтение с лимитами и опциональный SETEX.
   redis:
     enabled: false
-    url: redis://localhost:6379/0
-    socket_timeout_seconds: 10
-    get_max_value_bytes: 262144
-    mget_max_keys: 10
-    hgetall_max_fields: 100
-    hgetall_max_total_bytes: 262144
-    slowlog_max_entries: 32
-    scan_enabled: false
-    scan_prefix_allowlist: []
-    scan_max_iterations: 10
-    scan_count: 100
-    mtls_cert_file: null
-    mtls_key_file: null
-    mtls_root_ca_file: null
-    mtls_key_password: null
+    url: redis://:REPLACE_ME@redis.internal:6379/0   # rediss:// — для TLS-подключения
 
-  # HTTP API Prometheus (Pod: http://prometheus:9090 или port-forward).
+  # ───── Prometheus ───────────────────────────────────────────────
+  # Зачем: instant/range/series-запросы через HTTP API Prometheus.
   prometheus:
     enabled: false
-    base_url: http://localhost:9090
-    bearer_token: null
-    bearer_token_path: null
-    basic_auth_username: null
+    base_url: http://prometheus.internal:9090
+    basic_auth_username: null            # null — без авторизации
     basic_auth_password: null
-    verify_tls: true
-    timeout_seconds: 30
-    max_query_range_seconds: 604800
-    max_step_points: 11000
-    min_step_seconds: 1.0
-    # true — усекать большие ответы instant/range/series по max_* (дефолт false для крупных Prometheus).
-    truncate_responses: false
-    max_vector_samples: 500
-    max_matrix_series: 100
-    max_points_per_series: 5000
-    max_series_matches: 500
-    # Дефолтный топик для prometheus_export_instant_to_kafka (должен быть в kafka.topic_allowlist).
-    kafka_metrics_topic: null
-    mtls_cert_file: null
-    mtls_key_file: null
-    mtls_root_ca_file: null
-    mtls_key_password: null
 
-  # SSH: при enabled — ssh_hosts_overview, ssh_run_command и ssh_command_policy (политика запретов).
-  ssh:
-    enabled: false
-    strict_host_key_checking: false
-    connect_timeout_seconds: 30
-    command_timeout_seconds: 120
-    max_output_bytes: 262144
-    allow_shell_operators: false
-    # Встроенные regex: sudo/reboot/dd/curl/wget/perl|python|ruby -c|-e, eval, chmod 777, > /dev/sd*…
-    builtin_safety_filter: true
-    # К forbidden_substrings добавляется рекомендованный набор среднего риска (rm -rf, /etc/shadow, …).
-    merge_recommended_substring_blocklist: true
-    forbidden_substrings:
-      - "rm -rf /"
-      - "mkfs"
-      - "dd if=/dev/zero"
-      - ":(){ :|:& };:"
-    forbidden_regex: []
-    hosts: []
-    # Пример записи хоста:
-    # - id: web-prod-1
-    #   hostname: 203.0.113.10
-    #   port: 22
-    #   username: deploy
-    #   description: "Веб-нода прод"
-    #   private_key_path: ~/.ssh/id_ed25519
-    #   private_key_passphrase_env: null
-    #   # или пароль из окружения:
-    #   # password_env: SSH_WEB_PROD1_PASSWORD
-
-  # Почта: пароли только из env (imap_password_env обязателен при enabled: true).
-  # Пример: export SDOCS_MCP_MAIL_IMAP_PASSWORD='...'
+  # ───── Mail (IMAP + SMTP) ───────────────────────────────────────
+  # Зачем: чтение ящика и отправка писем. Пароли — ТОЛЬКО через env (поля *_env).
+  # Минимум для включения:
+  #   export SDOCS_MCP_MAIL_IMAP_USER=...
+  #   export SDOCS_MCP_MAIL_IMAP_PASSWORD=...
   mail:
     enabled: false
-    imap_host: localhost
-    imap_port: 993
+    # IMAP
+    imap_host: mail.internal
+    imap_port: 993                       # 993 — IMAPS
     imap_ssl: true
-    imap_username: ""
-    imap_username_env: null
-    imap_password_env: SDOCS_MCP_MAIL_IMAP_PASSWORD
+    imap_username: ""                     # пусто — взять из env (поле ниже)
+    imap_username_env: SDOCS_MCP_MAIL_IMAP_USER
+    imap_password_env: SDOCS_MCP_MAIL_IMAP_PASSWORD    # обязателен при enabled: true
     default_mailbox: INBOX
-    default_from_env: null
-    list_mailboxes_max: 200
-    search_max_messages: 50
-    fetch_max_bytes: 262144
-    smtp_host: localhost
-    smtp_port: 587
+    # SMTP
+    smtp_host: mail.internal
+    smtp_port: 587                       # 587 — submission + STARTTLS; 465 — implicit TLS
     smtp_ssl: false
     smtp_starttls: true
-    smtp_timeout_seconds: 30
-    smtp_username_env: null
-    smtp_password_env: null
+    smtp_username_env: SDOCS_MCP_MAIL_SMTP_USER
+    smtp_password_env: SDOCS_MCP_MAIL_SMTP_PASSWORD

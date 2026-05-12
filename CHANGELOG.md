@@ -7,6 +7,8 @@
 
 ### Изменено
 
+- **`config.example.yaml`**: переписан как минимальный шаблон для копирования (5 модулей + mail), с комментариями «зачем» по каждому полю; полный референс остался в **`deploy/config.production.example.yaml`** и **`docs/CAPABILITIES.md`**.
+- **`deploy/env.production.example`**: добавлены переменные почты **`SDOCS_MCP_MAIL_*`**, расширены пояснения к **`SDOCS_MCP_EMBED_MCP`**, **`SDOCS_MCP_STATELESS_HTTP`**, безопасности и аудиту.
 - Проект переименован в **SDocsMCP**: пакет Python `sdocs_mcp`, дистрибутив и CLI `sdocs-mcp` / `sdocs-mcp-ui`, переменные окружения с префиксом **`SDOCS_MCP_`**, systemd/OpenShift-манифесты `sdocs-mcp*`, пользователь ОС/контейнера `sdocsmcp`.
 
 ### Добавлено
