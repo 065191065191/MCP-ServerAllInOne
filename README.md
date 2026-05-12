@@ -193,7 +193,8 @@ sdocs-mcp
 - **Redis** — встроенный RESP2-клиент; чтение с лимитами, `SETEX` и опциональный `SCAN` по allowlist.
 - **Kafka** — только топики из `topic_allowlist`; produce/admin отдельными флагами.
 - **Почта** — IMAP/SMTP; пароли через env.
-- **OpenSearch** — cluster/cat/search/count; по умолчанию без деструктивных API (`allow_write: false`). Опционально **RAG** в allowlist-индексах; **`modules.prometheus.truncate_responses`** по умолчанию `false` — большие ответы Prometheus не режутся на стороне MCP.
+- **Prometheus** — HTTP API; по умолчанию **`truncate_responses: false`** (крупные ответы не режутся на стороне MCP).
+- **OpenSearch** — cluster/cat/search/count; по умолчанию без деструктивных API (`allow_write: false`). Опционально **RAG** в allowlist-индексах.
 
 Детали: [`docs/CAPABILITIES.md`](docs/CAPABILITIES.md).
 
