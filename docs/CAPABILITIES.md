@@ -11,11 +11,10 @@
 | Tool | Описание |
 |------|----------|
 | `sdocs_mcp_status` | JSON с флагами включённых модулей. |
-| `ssh_command_policy` | JSON: политика `ssh_run_command` — `forbidden_substrings`, **`merge_recommended_substring_blocklist`**, `forbidden_regex`, `allow_shell_operators`, `builtin_safety_filter`, лимит длины, правила на shell-операторы и список встроенных regex (`ssh_tools._BUILTIN_SAFETY`), если встроенный фильтр включён. |
 
 ## PostgreSQL (`modules.postgres`)
 
-Встроенные **SELECT**-сценарии (фиксированный код в репозитории). Отдельно — **именованные запросы из конфига** (`allowlisted_queries`): произвольный текст SQL задаётся **только в YAML** администратором; MCP-клиенты и крон передают лишь **`query_id`**, не строку SQL.
+Встроенные **SELECT**-сценарии (фиксированный код в репозитории). Отдельно — **именованные запросы из конфига** (`allowlisted_queries`): произвольный текст SQL задаётся **только в YAML** администратором; MCP-клиенты передают лишь **`query_id`**, не строку SQL.
 
 | Tool | Назначение |
 |------|------------|
@@ -69,7 +68,7 @@
 
 ## Prometheus (`modules.prometheus`)
 
-Доступ к **HTTP API** Prometheus (`base_url`, опционально Bearer из `bearer_token` / `bearer_token_path` или Basic auth). Ответы instant/range и список series обрезаются по лимитам конфига; широкие range-запросы могут автоматически увеличивать `step` до `max_step_points`.
+Доступ к **HTTP API** Prometheus (`base_url`, опционально Bearer из `bearer_token` / `bearer_token_path` или Basic auth). По умолчанию **`truncate_responses: false`** — ответы instant/range/series не усекаются на стороне MCP (подходит для крупных инсталляций). При `truncate_responses: true` применяются лимиты `max_vector_samples`, `max_matrix_series`, `max_points_per_series`, `max_series_matches`. Широкие range-запросы по-прежнему могут автоматически увеличивать `step` до `max_step_points`.
 
 | Tool | Назначение |
 |------|------------|
@@ -98,11 +97,13 @@
 
 | Tool | Назначение |
 |------|------------|
-| `ssh_command_policy` | Всегда зарегистрирован: политика блокировок для `ssh_run_command` (см. таблицу «Всегда доступно»). |
+| `ssh_command_policy` | Политика блокировок для `ssh_run_command` (см. конфиг `modules.ssh`). Только если **`modules.ssh.enabled`**. |
 | `ssh_hosts_overview` | Список хостов из конфига (без секретов). Только если `modules.ssh.enabled`. |
 | `ssh_run_command` | Одна команда на хост после проверок `forbidden_*` и shell-правил. Только если `modules.ssh.enabled`. |
 
 ## OpenSearch (`modules.opensearch`)
+
+По умолчанию **`allow_write: false`**: инструмент **`opensearch_delete_index`** не регистрируется; операции **`opensearch_search`** и **`opensearch_count`** — только чтение. Значение **`search_max_size`** (по умолчанию 2000) ограничивает `size` в теле поиска — большие выборки логов и агрегаты `count` допустимы в рамках лимита (при необходимости поднимите в YAML).
 
 Опционально **`modules.opensearch.tool_call_audit`**: каждый вызов MCP tool в индекс (10 признаков, **`caller_id`** / опционально IP, аргументы и ответ с лимитами, `duration_ms`, ошибка). Кто вызвал: заголовок **`caller_http_header`**, либо **`SDOCS_MCP_AUDIT_CALLER_ID`**, либо **`default_caller_id`**. Подробности: **[`TOOL_CALL_AUDIT.md`](TOOL_CALL_AUDIT.md)**.
 
@@ -139,12 +140,12 @@
 
 ## Демо UI (`sdocs-mcp-ui`)
 
-Веб-интерфейс для проверки конфигурации и бэкендов (см. `README.md`). Сам протокол MCP в `sdocs-mcp` — **HTTP** (Streamable HTTP или SSE), не stdio по умолчанию.
+Веб-интерфейс для проверки конфигурации и бэкендов (см. `README.md`). Опциональный префикс путей: **`SDOCS_MCP_UI_BASE_PATH`** (например `/mcp-server` → `/mcp-server/api/status`, `/mcp-server/mcp` при встроенном MCP). Сам протокол MCP в `sdocs-mcp` — **HTTP** (Streamable HTTP или SSE), не stdio по умолчанию.
 
 | Путь | Назначение |
 |------|------------|
 | `/health` | Liveness: `200` и тело `ok`, без загрузки конфига (Docker/Kubernetes). |
-| `/ready` | Readiness: `200` если `SDOCS_MCP_CONFIG` указывает на файл и YAML парсится; иначе `503`. |
+| `/ready` | Readiness: `200`, если валидируется `AppConfig` (файл `SDOCS_MCP_CONFIG` необязателен — пустой конфиг = значения по умолчанию); иначе `503`. |
 | `/` | Главная: флаги всех модулей MCP (как в `sdocs_mcp_status`), проверки доступности по каждому бэкенду (включая почту и SSH TCP), очередь Kafka, превью `/metrics`, список tools, allowlist-вызовы. |
 | `/status-page` | Текст экспозиции Prometheus с `/metrics` (при защите метрик — поле для секрета). |
 | `/api/*` | JSON API: Bearer **опционально** — если задан `SDOCS_MCP_UI_TOKEN`, без него `401`; иначе запросы принимаются. Rate limit по IP, audit JSONL. |

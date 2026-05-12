@@ -28,7 +28,7 @@ modules:
     # Если задано — пароль из переменной окружения (имя переменной, не значение).
     password_env: null
     request_timeout_seconds: 30
-    search_max_size: 50
+    search_max_size: 2000
     allow_write: false
     mtls_cert_file: null
     mtls_key_file: null
@@ -102,11 +102,11 @@ modules:
     statement_timeout_seconds: 25
     long_query_limit: 20
     top_n_tables: 20
-    # Именованные SELECT только из списка; MCP-клиент / крон вызывает postgres_allowlisted_query(query_id).
+    # Именованные SELECT только из списка; MCP-клиенты вызывают postgres_allowlisted_query(query_id).
     allowlisted_queries: []
     # Пример:
     # allowlisted_queries:
-    #   - id: cron-ping
+    #   - id: health-ping
     #     description: Проверка соединения
     #     max_rows: 5
     #     sql: SELECT 1 AS ok
@@ -147,6 +147,8 @@ modules:
     max_query_range_seconds: 604800
     max_step_points: 11000
     min_step_seconds: 1.0
+    # true — усекать большие ответы instant/range/series по max_* (дефолт false для крупных Prometheus).
+    truncate_responses: false
     max_vector_samples: 500
     max_matrix_series: 100
     max_points_per_series: 5000
@@ -158,8 +160,7 @@ modules:
     mtls_root_ca_file: null
     mtls_key_password: null
 
-  # SSH: агент видит хосты через ssh_hosts_overview; опасные шаблоны — в forbidden_*.
-  # Список блокировок для ssh_run_command: MCP tool ssh_command_policy (всегда доступен).
+  # SSH: при enabled — ssh_hosts_overview, ssh_run_command и ssh_command_policy (политика запретов).
   ssh:
     enabled: false
     strict_host_key_checking: false

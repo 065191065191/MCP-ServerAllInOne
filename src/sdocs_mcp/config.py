@@ -167,7 +167,7 @@ class OpenSearchModuleConfig(ModuleClientMtlsMixin):
     # Если задано — пароль берётся из os.environ[password_env], иначе из password.
     password_env: str | None = None
     request_timeout_seconds: int = 30
-    search_max_size: int = 50
+    search_max_size: int = 2000
     allow_write: bool = False
     rag: OpenSearchRagConfig = Field(default_factory=OpenSearchRagConfig)
     search_audit_log: OpenSearchSearchAuditLogConfig = Field(default_factory=OpenSearchSearchAuditLogConfig)
@@ -211,7 +211,7 @@ class KafkaModuleConfig(ModuleClientMtlsMixin):
 
 
 class PostgresAllowlistedQuery(BaseModel):
-    """Именованный SELECT из конфига; MCP-клиенты передают только id (крон — обычный клиент)."""
+    """Именованный SELECT из конфига; MCP-клиенты передают только id (не сырой SQL)."""
 
     id: str = Field(
         min_length=1,
@@ -302,6 +302,8 @@ class PrometheusModuleConfig(ModuleClientMtlsMixin):
     max_query_range_seconds: int = 604_800
     max_step_points: int = 11_000
     min_step_seconds: float = 1.0
+    # При false ответы instant/range/series не усекаются на стороне MCP (крупные дашборды и сотни таргетов — норма).
+    truncate_responses: bool = False
     max_vector_samples: int = 500
     max_matrix_series: int = 100
     max_points_per_series: int = 5000

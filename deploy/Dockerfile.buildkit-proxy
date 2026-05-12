@@ -8,7 +8,7 @@
 # 2) Сборка:
 #    DOCKER_BUILDKIT=1 docker build \
 #      --secret id=build_proxy,src=build-proxy.url \
-#      -f deploy/Dockerfile.buildkit-proxy -t sdocs-mcp-ui:0.3.2 .
+#      -f deploy/Dockerfile.buildkit-proxy -t sdocs-mcp-ui:0.4.0 .
 #
 # Обычный Dockerfile без секретов: deploy/Dockerfile
 

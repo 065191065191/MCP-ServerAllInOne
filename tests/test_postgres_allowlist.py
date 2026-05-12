@@ -94,8 +94,8 @@ def test_allowlisted_query_catalog_json() -> None:
     cfg = PostgresModuleConfig(
         enabled=True,
         allowlisted_queries=[
-            PostgresAllowlistedQuery(id="cron-ping", sql="SELECT 1", description="ping", max_rows=3),
+            PostgresAllowlistedQuery(id="named-ping", sql="SELECT 1", description="ping", max_rows=3),
         ],
     )
     out = json.loads(postgres_allowlisted_query_catalog(cfg))
-    assert out["queries"] == [{"id": "cron-ping", "description": "ping", "max_rows": 3}]
+    assert out["queries"] == [{"id": "named-ping", "description": "ping", "max_rows": 3}]

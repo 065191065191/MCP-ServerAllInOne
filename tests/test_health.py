@@ -19,18 +19,8 @@ def test_ready_without_config_file(monkeypatch: pytest.MonkeyPatch) -> None:
 
     with TestClient(app) as client:
         r = client.get("/ready")
-        assert r.status_code == 503
-
-
-def test_cron_page_ok() -> None:
-    from sdocs_mcp.info_app import app
-
-    with TestClient(app) as client:
-        r = client.get("/cron-page")
         assert r.status_code == 200
-        assert "allowlisted_query" in r.text or "allowlist" in r.text
-        r2 = client.get("/cron")
-        assert r2.status_code == 200
+        assert r.json().get("status") == "ready"
 
 
 def test_executive_dashboard_page_ok() -> None:

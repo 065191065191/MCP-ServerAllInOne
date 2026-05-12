@@ -21,6 +21,28 @@
 
 - **`docs/PRODUCT_OVERVIEW.html`**, **`docs/PRODUCT_OVERVIEW_SPEAKER_NOTES.html`**: дублировали материал; витрина и сценарий сведены в **`EXECUTIVE_ONEPAGER.*`**.
 
+## [0.4.0] — 2026-05-12
+
+### Добавлено
+
+- **`SDOCS_MCP_UI_BASE_PATH`**: единый префикс для маршрутов веб-UI и JSON API (`/api/*`, `/health`, `/ready`, `/metrics`) и для встроенного MCP (`…/mcp`); реализация в `ui_paths.normalize_ui_base_path`, роутер FastAPI с `include_router(..., prefix=…)`.
+- **`modules.prometheus.truncate_responses`** (по умолчанию `false`): не усекать ответы instant/range/series на стороне MCP; при `true` сохраняется прежнее поведение с лимитами `max_*`.
+- Увеличен дефолт **`modules.opensearch.search_max_size`** до **2000** для крупных выборок логов и count.
+
+### Изменено
+
+- Конфиг **опционален**: при отсутствии файла или `SDOCS_MCP_CONFIG` используется пустой YAML и дефолты `AppConfig`; UI и `/ready` не падают из‑за отсутствия файла; **`/ready`** возвращает `200`, если валидация конфига успешна.
+- **`ssh_command_policy`** регистрируется **только** при **`modules.ssh.enabled`** (вместе с остальными SSH tools); убран из allowlist вызовов из UI.
+- Документация: OpenSearch по умолчанию read-only (`allow_write: false`); разграничение **tool_call_audit** (журнал вызовов MCP) и **RAG**; Prometheus и префикс UI.
+
+### Удалено
+
+- Страницы и маршруты **`/cron-page`**, **`/cron`** и весь связанный с кроном UI/текст.
+
+### Изменено (версионирование)
+
+- Версия пакета и теги образов по умолчанию — **0.4.0** (`pyproject.toml`, Docker, OpenShift, `deploy/*`, README, офлайн-док).
+
 ## [0.3.2] — 2026-05-02
 
 ### Добавлено

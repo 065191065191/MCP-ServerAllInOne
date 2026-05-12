@@ -1,6 +1,7 @@
 """Статическая разметка главного дашборда (стиль заказчика); данные — через GET /api/dashboard-stats."""
 
 from sdocs_mcp.ui_nav import inject_top_nav
+from sdocs_mcp.ui_paths import normalize_ui_base_path
 
 _DASHBOARD_HTML_RAW = """<!DOCTYPE html>
 <html lang="ru">
@@ -8,6 +9,7 @@ _DASHBOARD_HTML_RAW = """<!DOCTYPE html>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>MCP метрики — дашборд</title>
+  <script>const __UI_BASE="{{UI_BASE_PATH}}";</script>
   <style>
 {{TOPNAV_STYLES}}
     nav.sdocs-mcp-topnav { border-color: var(--border-light); background: var(--bg-card-light); }
@@ -359,7 +361,7 @@ _DASHBOARD_HTML_RAW = """<!DOCTYPE html>
 
   async function refresh() {
     try {
-      const r = await fetch('/api/dashboard-stats', { headers: authHeader() });
+      const r = await fetch(__UI_BASE + '/api/dashboard-stats', { headers: authHeader() });
       const txt = await r.text();
       if (!r.ok) throw new Error(txt);
       applyPayload(JSON.parse(txt));
@@ -392,4 +394,4 @@ _DASHBOARD_HTML_RAW = """<!DOCTYPE html>
 </html>
 """
 
-DASHBOARD_HTML = inject_top_nav(_DASHBOARD_HTML_RAW, "dash")
+DASHBOARD_HTML = inject_top_nav(_DASHBOARD_HTML_RAW.replace("{{UI_BASE_PATH}}", normalize_ui_base_path()), "dash")

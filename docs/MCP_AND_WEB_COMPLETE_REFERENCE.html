@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SDocsMCP — полный справочник MCP, веб-UI, TLS и переменных окружения</title>
+  <style>
+    :root { --bg: #0b0f14; --card: #121820; --text: #e8edf4; --muted: #8b98a8; --accent: #34d399; --border: #1e2836; }
+    body { font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; margin: 0; padding: 24px 20px 48px; }
+    main { max-width: 1280px; margin: 0 auto; }
+    h1 { font-size: 1.55rem; letter-spacing: -0.02em; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
+    h2 { font-size: 1.2rem; margin-top: 2rem; color: var(--accent); }
+    h3 { font-size: 1rem; margin-top: 1.25rem; }
+    p, li { color: var(--muted); max-width: 95ch; }
+    a { color: var(--accent); }
+    table { width: 100%; border-collapse: collapse; margin: 12px 0 20px; font-size: 0.88rem; }
+    th, td { border: 1px solid var(--border); padding: 8px 10px; vertical-align: top; text-align: left; }
+    th { background: var(--card); color: var(--text); font-weight: 600; }
+    tr:nth-child(even) td { background: rgba(255,255,255,0.02); }
+    code { font-family: ui-monospace, Consolas, monospace; font-size: 0.86em; background: var(--card); padding: 2px 6px; border-radius: 4px; }
+    .note { font-size: 0.85rem; border-left: 3px solid var(--accent); padding-left: 12px; margin: 12px 0; }
+    .toc ul { columns: 2; column-gap: 2rem; }
+    @media (max-width: 800px) { .toc ul { columns: 1; } }
+    caption { caption-side: top; text-align: left; font-weight: 600; color: var(--text); padding: 8px 0; }
+    .small { font-size: 0.82rem; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>SDocsMCP — полный справочник (MCP, веб-UI, TLS/mTLS, конфиг, env)</h1>
+  <p class="small">Версия документа по коду репозитория: пакет <code>sdocs-mcp</code> / UI <code>sdocs-mcp-ui</code>. Сгенерировано для сопровождения и настройки LLM-клиентов. Источник правды — исходники <code>src/sdocs_mcp/</code> и <code>config.example.yaml</code>.</p>
+
+  <nav class="toc" aria-label="Содержание">
+    <h2>Содержание</h2>
+    <ul>
+      <li><a href="#arch">1. Архитектура: что считать «MCP-сервером»</a></li>
+      <li><a href="#modules">2. Модули бэкенда и условие «включён»</a></li>
+      <li><a href="#tools">3. Таблица всех MCP tools</a></li>
+      <li><a href="#web">4. Веб-UI и HTTP-эндпоинты</a></li>
+      <li><a href="#embed">5. Встроенный MCP на <code>/mcp</code></a></li>
+      <li><a href="#tls">6. TLS и mTLS (сервер MCP и UI)</a></li>
+      <li><a href="#client-mtls">7. Клиентский mTLS к бэкендам (YAML)</a></li>
+      <li><a href="#config">8. Конфигурация YAML (обзор)</a></li>
+      <li><a href="#env">9. Переменные окружения <code>SDOCS_MCP_*</code> и связанные</a></li>
+    </ul>
+  </nav>
+
+  <h2 id="arch">1. Архитектура: что считать «MCP-сервером»</h2>
+  <p>В проекте один процесс протокола MCP под именем FastMCP <strong><code>sdocs-mcp</code></strong> (CLI <code>sdocs-mcp</code>): набор инструментов (tools) зависит от YAML <code>modules.*.enabled</code>. Отдельный процесс <strong><code>sdocs-mcp-ui</code></strong> — это <strong>не</strong> отдельный MCP-сервер, а веб-приложение (FastAPI) с дашбордом, JSON API и Prometheus <code>/metrics</code>; при <code>SDOCS_MCP_EMBED_MCP=true</code> оно монтирует тот же набор MCP tools по HTTP на путь <code>/mcp</code>.</p>
+  <div class="note">Итого «логических MCP-серверов» по смыслу заказчика: <strong>один</strong> (<code>sdocs-mcp</code>), плюс опционально <strong>тот же</strong> экземпляр внутри UI на <code>/mcp</code>.</div>
+
+  <h2 id="modules">2. Модули бэкенда и условие «включён»</h2>
+  <table aria-describedby="mod-cap">
+    <caption id="mod-cap">Регистрация инструментов в <code>build_mcp()</code></caption>
+    <thead>
+      <tr><th>Модуль (YAML)</th><th>Включение</th><th>Комментарий</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>modules.postgres</code></td><td><code>enabled: true</code></td><td>Диагностические SQL; именованные запросы — только если <code>allowlisted_queries</code> не пуст.</td></tr>
+      <tr><td><code>modules.redis</code></td><td><code>enabled: true</code></td><td><code>redis_scan_prefix</code> — дополнительно <code>scan_enabled: true</code> и allowlist префиксов.</td></tr>
+      <tr><td><code>modules.kafka</code></td><td><code>enabled: true</code></td><td>Нужен непустой <code>topic_allowlist</code>. <code>kafka_produce</code> — <code>allow_produce: true</code>. <code>kafka_create_topic</code> — <code>allow_admin: true</code>.</td></tr>
+      <tr><td><code>modules.mail</code></td><td><code>enabled: true</code></td><td>Обязательно непустое <code>imap_password_env</code> (имя переменной с паролем IMAP).</td></tr>
+      <tr><td><code>modules.opensearch</code></td><td><code>enabled: true</code></td><td>RAG-tools — если <code>rag.enabled: true</code>. <code>opensearch_delete_index</code> — если <code>allow_write: true</code>. <code>opensearch_rag_delete_document</code> — если <code>rag.allow_delete_by_id: true</code>.</td></tr>
+      <tr><td><code>modules.prometheus</code></td><td><code>enabled: true</code></td><td><code>prometheus_export_instant_to_kafka</code> — если включён Kafka и <code>allow_produce: true</code>.</td></tr>
+      <tr><td><code>modules.ssh</code></td><td><code>enabled: true</code></td><td><code>ssh_command_policy</code>, <code>ssh_hosts_overview</code> и <code>ssh_run_command</code>.</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="tools">3. Таблица всех MCP tools</h2>
+  <p class="small">Колонка «Включён»: <strong>всегда</strong> | <strong>postgres</strong> | <strong>postgres+allowlist</strong> | … См. раздел 2.</p>
+  <table>
+    <thead>
+      <tr>
+        <th>Имя tool</th>
+        <th>Модуль / условие</th>
+        <th>Функционал</th>
+        <th>Подсказка для LLM</th>
+        <th>Ограничения</th>
+        <th>Включён</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td><code>sdocs_mcp_status</code></td><td>—</td><td>JSON: какие модули включены, allowlist id Postgres, флаги stateless/mTLS/аудита.</td><td>Вызывай первым, чтобы узнать доступные бэкенды без секретов.</td><td>Не раскрывает учётные данные.</td><td><strong>всегда</strong></td></tr>
+      <tr><td><code>ssh_command_policy</code></td><td>ssh enabled</td><td>JSON политики для <code>ssh_run_command</code>: запрещённые подстроки/regex, shell-операторы, встроенный safety.</td><td>Перед <code>ssh_run_command</code> прочитай политику и сформируй команду в рамках правил.</td><td>Сама по себе на хост не ходит.</td><td>ssh</td></tr>
+      <tr><td><code>postgres_connections_overview</code></td><td>postgres</td><td>Сводка <code>pg_stat_activity</code> по состояниям.</td><td>Быстрая диагностика нагрузки/зависаний сессий.</td><td>Только read-only фиксированный запрос; лимиты конфига.</td><td><code>modules.postgres.enabled</code></td></tr>
+      <tr><td><code>postgres_long_running_queries</code></td><td>postgres</td><td>Топ активных долгих запросов, превью текста.</td><td>Ищи «кто жрёт CPU/IO».</td><td>Превью обрезано (~200 символов).</td><td>postgres</td></tr>
+      <tr><td><code>postgres_blocking_chains</code></td><td>postgres</td><td>Цепочки блокировок.</td><td>Разбор взаимных блокировок.</td><td>Лимит строк (напр. 50).</td><td>postgres</td></tr>
+      <tr><td><code>postgres_database_sizes</code></td><td>postgres</td><td>Топ БД по размеру.</td><td>Планирование диска.</td><td>Ограничение списка БД из DSN см. <code>allowed_databases</code> / префиксы / regex.</td><td>postgres</td></tr>
+      <tr><td><code>postgres_table_sizes</code></td><td>postgres</td><td>Топ таблиц в <code>schema_allowlist</code>.</td><td>Найти крупные таблицы.</td><td>Только allowlist схем.</td><td>postgres</td></tr>
+      <tr><td><code>postgres_index_usage</code></td><td>postgres</td><td>Индексы с низким <code>idx_scan</code>.</td><td>Кандидаты на удаление/оптимизацию.</td><td>Read-only агрегаты.</td><td>postgres</td></tr>
+      <tr><td><code>postgres_cache_hit_ratio</code></td><td>postgres</td><td>Buffer cache hit по таблицам.</td><td>Оценка эффективности кэша.</td><td>—</td><td>postgres</td></tr>
+      <tr><td><code>postgres_replication_lag</code></td><td>postgres</td><td><code>pg_stat_replication</code> или сообщение об отсутствии реплик.</td><td>Проверка репликации.</td><td>—</td><td>postgres</td></tr>
+      <tr><td><code>postgres_autovacuum_health</code></td><td>postgres</td><td>Мёртвые строки / метки autovacuum.</td><td>Оценка bloat/autovacuum.</td><td>—</td><td>postgres</td></tr>
+      <tr><td><code>postgres_statements_top</code></td><td>postgres</td><td>Топ по <code>pg_stat_statements</code>.</td><td>Используй только если расширение включено на сервере БД.</td><td>Без расширения запрос завершится ошибкой со стороны Postgres.</td><td>postgres</td></tr>
+      <tr><td><code>postgres_allowlisted_query_catalog</code></td><td>postgres + непустой <code>allowlisted_queries</code></td><td>Список <code>id</code>, описание, <code>max_rows</code> без текста SQL.</td><td>Сначала каталог, потом вызов по <code>query_id</code>.</td><td>Не регистрируется при пустом allowlist.</td><td>условно</td></tr>
+      <tr><td><code>postgres_allowlisted_query</code></td><td>то же</td><td>Выполнение одного SELECT/WITH по <code>query_id</code>.</td><td>Никогда не подставляй произвольный SQL — только id из каталога.</td><td>SQL только из YAML; валидация read-only; <code>max_rows</code>; запрет <code>INTO</code> и DML.</td><td>условно</td></tr>
+      <tr><td><code>redis_ping</code></td><td>redis</td><td><code>PING</code>.</td><td>Проверка живости.</td><td>—</td><td>redis</td></tr>
+      <tr><td><code>redis_info</code></td><td>redis</td><td>Секции INFO (server, memory, stats, …).</td><td>Обзор состояния инстанса.</td><td>Фиксированный набор секций.</td><td>redis</td></tr>
+      <tr><td><code>redis_memory_stats</code></td><td>redis</td><td><code>MEMORY STATS</code> если поддерживается.</td><td>Деталь памяти.</td><td>Зависит от версии Redis.</td><td>redis</td></tr>
+      <tr><td><code>redis_dbsize</code></td><td>redis</td><td><code>DBSIZE</code>.</td><td>Количество ключей в текущей БД.</td><td>—</td><td>redis</td></tr>
+      <tr><td><code>redis_slowlog_get</code></td><td>redis</td><td><code>SLOWLOG GET</code> с лимитом из конфига.</td><td>Медленные команды.</td><td>—</td><td>redis</td></tr>
+      <tr><td><code>redis_get</code></td><td>redis</td><td><code>GET</code> одного ключа; обрезка значения.</td><td>Чтение одного ключа диагностики.</td><td><code>get_max_value_bytes</code>.</td><td>redis</td></tr>
+      <tr><td><code>redis_mget</code></td><td>redis</td><td><code>MGET</code> до N ключей.</td><td>Пакетное чтение.</td><td><code>mget_max_keys</code>.</td><td>redis</td></tr>
+      <tr><td><code>redis_hgetall</code></td><td>redis</td><td><code>HGETALL</code> с лимитами полей/размера.</td><td>Диагностика hash.</td><td>Лимиты в конфиге.</td><td>redis</td></tr>
+      <tr><td><code>redis_setex</code></td><td>redis</td><td><code>SETEX</code> с лимитами TTL/размера.</td><td>Только контролируемая запись (сид/тест).</td><td>Не произвольные команды.</td><td>redis</td></tr>
+      <tr><td><code>redis_scan_prefix</code></td><td>redis + <code>scan_enabled</code></td><td><code>SCAN</code> по префиксу из allowlist.</td><td>Ищи ключи по известному префиксу из конфига.</td><td>Без <code>KEYS</code>; итерации/лимиты из YAML.</td><td>условно</td></tr>
+      <tr><td><code>kafka_list_topics</code></td><td>kafka</td><td>Список топиков, обрезка <code>list_topics_max</code>.</td><td>Обзор кластера.</td><td>—</td><td>kafka</td></tr>
+      <tr><td><code>kafka_describe_topic</code></td><td>kafka</td><td>Partition IDs для топика.</td><td>Перед <code>consume_recent</code> выбери партицию.</td><td>Топик ∈ <code>topic_allowlist</code>.</td><td>kafka</td></tr>
+      <tr><td><code>kafka_consume_recent</code></td><td>kafka</td><td>Чтение хвоста с одной партиции.</td><td>Отладка сообщений; укажи topic, partition, max_messages.</td><td><code>consume_max_messages</code>, байты, таймаут poll.</td><td>kafka</td></tr>
+      <tr><td><code>kafka_produce</code></td><td>kafka + <code>allow_produce</code></td><td>Пакетная отправка в allowlisted topic.</td><td>Только доверенные топики; маленькие батчи.</td><td><code>produce_max_messages</code>, размер сообщения.</td><td>условно</td></tr>
+      <tr><td><code>kafka_create_topic</code></td><td>kafka + <code>allow_admin</code></td><td>Создание топика (partitions, replication).</td><td>Админ-операция; имя топика должно входить в <code>topic_allowlist</code> (та же проверка, что для produce).</td><td>Без <code>allow_admin: true</code> tool не регистрируется.</td><td>условно</td></tr>
+      <tr><td><code>mail_imap_list_mailboxes</code></td><td>mail</td><td><code>LIST</code> ящиков.</td><td>Навигация по почтовым папкам.</td><td>Лимит количества из конфига.</td><td>mail</td></tr>
+      <tr><td><code>mail_imap_search</code></td><td>mail</td><td><code>SEARCH</code> (по умолчанию UNSEEN), UID с потолком.</td><td>Получи UID, затем <code>fetch</code>.</td><td><code>search_max_messages</code>.</td><td>mail</td></tr>
+      <tr><td><code>mail_imap_fetch_rfc822</code></td><td>mail</td><td><code>FETCH BODY.PEEK[]</code> по UID; превью обрезано.</td><td>Чтение письма по UID из папки.</td><td><code>fetch_max_bytes</code>.</td><td>mail</td></tr>
+      <tr><td><code>mail_smtp_send</code></td><td>mail</td><td>Отправка письма через SMTP (TLS/STARTTLS).</td><td>Отправка только через параметры to/subject/body; секреты из env.</td><td>Настройки SMTP/IMAP в YAML.</td><td>mail</td></tr>
+      <tr><td><code>prometheus_query_instant</code></td><td>prometheus</td><td><code>/api/v1/query</code>; при <code>truncate_responses: true</code> — ограничение размера вектора.</td><td>Мгновенные метрики PromQL.</td><td>По умолчанию ответ не усекается на стороне MCP.</td><td>prometheus</td></tr>
+      <tr><td><code>prometheus_query_range</code></td><td>prometheus</td><td><code>/api/v1/query_range</code>, step может авторасширяться; усечение матрицы — только при <code>truncate_responses: true</code>.</td><td>Ряды во времени.</td><td><code>max_step_points</code>, окно <code>max_query_range_seconds</code>.</td><td>prometheus</td></tr>
+      <tr><td><code>prometheus_targets</code></td><td>prometheus</td><td><code>/api/v1/targets</code>.</td><td>Статус скрейпа.</td><td>—</td><td>prometheus</td></tr>
+      <tr><td><code>prometheus_metadata</code></td><td>prometheus</td><td><code>/api/v1/metadata</code>.</td><td>Справка по метрикам.</td><td>—</td><td>prometheus</td></tr>
+      <tr><td><code>prometheus_series</code></td><td>prometheus</td><td><code>/api/v1/series</code>, список селекторов; усечение списка — при <code>truncate_responses: true</code>.</td><td>Поиск серий по матчерам.</td><td><code>max_series_matches</code> при включённом truncate.</td><td>prometheus</td></tr>
+      <tr><td><code>prometheus_labels</code></td><td>prometheus</td><td><code>/api/v1/labels</code>.</td><td>Список имён лейблов.</td><td>—</td><td>prometheus</td></tr>
+      <tr><td><code>prometheus_rules</code></td><td>prometheus</td><td><code>/api/v1/rules</code>.</td><td>Правила recording/alerting.</td><td>—</td><td>prometheus</td></tr>
+      <tr><td><code>prometheus_alerts</code></td><td>prometheus</td><td><code>/api/v1/alerts</code>.</td><td>Активные алерты.</td><td>—</td><td>prometheus</td></tr>
+      <tr><td><code>prometheus_export_instant_to_kafka</code></td><td>prometheus + kafka produce</td><td>Instant query → JSON в Kafka topic.</td><td>Интеграция метрик в поток событий.</td><td>Топик ∈ kafka allowlist; нужен <code>allow_produce</code>.</td><td>условно</td></tr>
+      <tr><td><code>opensearch_cluster_health</code></td><td>opensearch</td><td>Health кластера.</td><td>Базовая проверка кластера OS.</td><td>Учётные данные не в ответе.</td><td>opensearch</td></tr>
+      <tr><td><code>opensearch_cluster_health_debug</code></td><td>opensearch</td><td>Расширенный health + shards + pending.</td><td>Углублённая диагностика.</td><td>—</td><td>opensearch</td></tr>
+      <tr><td><code>opensearch_cluster_stats</code></td><td>opensearch</td><td>Статистика кластера.</td><td>Ёмкость/нагрузка.</td><td>—</td><td>opensearch</td></tr>
+      <tr><td><code>opensearch_nodes_stats</code></td><td>opensearch</td><td>Статистика нод.</td><td>OS/JVM/indices и т.д.</td><td>Большой JSON.</td><td>opensearch</td></tr>
+      <tr><td><code>opensearch_pending_tasks</code></td><td>opensearch</td><td>Очередь pending tasks.</td><td>Проблемы мастера/кластера.</td><td>—</td><td>opensearch</td></tr>
+      <tr><td><code>opensearch_cluster_settings</code></td><td>opensearch</td><td>Настройки persistent/transient/defaults.</td><td>Аудит настроек.</td><td>Read API.</td><td>opensearch</td></tr>
+      <tr><td><code>opensearch_cat_shards</code></td><td>opensearch</td><td>Таблица шардов.</td><td>Распределение шардов.</td><td>—</td><td>opensearch</td></tr>
+      <tr><td><code>opensearch_allocation_explain</code></td><td>opensearch</td><td>Explain аллокации шарда.</td><td>Почему шард unassigned.</td><td>Опциональные index/shard/primary.</td><td>opensearch</td></tr>
+      <tr><td><code>opensearch_list_indices</code></td><td>opensearch</td><td>Список индексов (pattern).</td><td>Инвентаризация индексов.</td><td>—</td><td>opensearch</td></tr>
+      <tr><td><code>opensearch_get_mapping</code></td><td>opensearch</td><td>Mapping индекса.</td><td>Схема полей.</td><td>—</td><td>opensearch</td></tr>
+      <tr><td><code>opensearch_search</code></td><td>opensearch</td><td>Поиск DSL; <code>size</code> режется <code>search_max_size</code>.</td><td>Поиск с JSON-телом (ограниченный).</td><td>Нет произвольной записи без других флагов.</td><td>opensearch</td></tr>
+      <tr><td><code>opensearch_count</code></td><td>opensearch</td><td>Count с опциональным фильтром.</td><td>Подсчёт документов.</td><td>—</td><td>opensearch</td></tr>
+      <tr><td><code>opensearch_delete_index</code></td><td>opensearch + <code>allow_write: true</code></td><td>Удаление индекса.</td><td>Только если политика явно разрешает запись.</td><td>Деструктивно; выключено по умолчанию.</td><td>условно</td></tr>
+      <tr><td><code>opensearch_rag_policy</code></td><td>opensearch + <code>rag.enabled</code></td><td>JSON политики RAG: allowlist, лимиты, поля.</td><td>Всегда первым перед store/search в RAG.</td><td>Только индексы из allowlist.</td><td>условно</td></tr>
+      <tr><td><code>opensearch_rag_stats</code></td><td>то же</td><td>Счётчики документов по индексам allowlist.</td><td>Объём памяти агента.</td><td>Считает документы с <code>source_tag</code>.</td><td>условно</td></tr>
+      <tr><td><code>opensearch_rag_store</code></td><td>то же</td><td>Запись одного документа (text, title, session, metadata).</td><td>Долговременные факты для агента.</td><td>Лимиты размеров; <code>max_docs_per_index</code>; не векторный knn в коде.</td><td>условно</td></tr>
+      <tr><td><code>opensearch_rag_search</code></td><td>то же</td><td>BM25 поиск + highlight; опционально session.</td><td>Контекст для промпта.</td><td><code>retrieval_size_cap</code>.</td><td>условно</td></tr>
+      <tr><td><code>opensearch_rag_delete_document</code></td><td>rag + <code>allow_delete_by_id</code></td><td>Удаление документа по id.</td><td>Явное удаление записи памяти.</td><td>Только если включено в конфиге.</td><td>условно</td></tr>
+      <tr><td><code>ssh_hosts_overview</code></td><td>ssh enabled</td><td>Список хостов из конфига без секретов.</td><td>Выбор <code>host_id</code> для команды.</td><td>Не показывает ключи/пароли.</td><td>ssh</td></tr>
+      <tr><td><code>ssh_run_command</code></td><td>ssh enabled</td><td>Одна команда на хост по SSH после фильтров.</td><td>Сначала <code>ssh_command_policy</code>; не пытайся обходить фильтры.</td><td>Таймаут, лимит вывода; политика запретов.</td><td>ssh</td></tr>
+    </tbody>
+  </table>
+  <p class="small">При <code>modules.opensearch.tool_call_audit.enabled</code> используется подкласс <code>AuditedFastMCP</code>: каждый вызов tool дополнительно логируется в индекс OpenSearch (см. <code>docs/TOOL_CALL_AUDIT.md</code>). Это не отдельные tools, а обёртка над всеми зарегистрированными.</p>
+
+  <h2 id="web">4. Веб-UI и HTTP-эндпоинты (<code>sdocs-mcp-ui</code>)</h2>
+  <p>Процесс FastAPI (<code>sdocs_mcp.info_app:app</code>). Если задан <code>SDOCS_MCP_UI_BASE_PATH</code> (например <code>/mcp-server</code>), все маршруты ниже получают этот префикс: <code>/mcp-server/health</code>, <code>/mcp-server/api/status</code>, … Пусто или <code>/</code> — префикса нет (как раньше).</p>
+  <table>
+    <thead>
+      <tr><th>Путь</th><th>Метод</th><th>Назначение</th><th>Авторизация / защита</th><th>Примечание</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>/health</code></td><td>GET</td><td>Liveness: тело <code>ok</code>, без загрузки конфига.</td><td>Нет</td><td>Docker/K8s probes.</td></tr>
+      <tr><td><code>/ready</code></td><td>GET</td><td>Readiness: JSON <code>ready</code> если конфиг валидируется (файл по <code>SDOCS_MCP_CONFIG</code> необязателен).</td><td>Нет</td><td>Иначе HTTP 503.</td></tr>
+      <tr><td><code>/</code>, <code>/dashboard</code></td><td>GET</td><td>HTML дашборд (метрики, ROI-модель, статусы модулей).</td><td>Страница публична; данные тянет с <code>/api/dashboard-stats</code> (см. ниже).</td><td>Токен для API — вручную / localStorage на консоли.</td></tr>
+      <tr><td><code>/ops</code></td><td>GET</td><td>HTML консоль: токены, вкладки статуса модулей, превью <code>/metrics</code>, список tools, invoke, seed.</td><td>HTML публичен; вызовы API — см. ниже.</td><td>Invoke/seed зависят от env флагов.</td></tr>
+      <tr><td><code>/status-page</code></td><td>GET</td><td>HTML: сырой текст <code>/metrics</code> в браузере.</td><td>Секрет метрик вводится на странице (Bearer).</td><td>Опрос каждые 15 с.</td></tr>
+      <tr><td><code>/api/auth-config</code></td><td>GET</td><td>JSON: <code>ui_bearer_enabled</code>, <code>metrics_auth_required</code>.</td><td>Публично</td><td>Для подсказок в UI.</td></tr>
+      <tr><td><code>/api/config-path</code></td><td>GET</td><td>JSON: путь <code>SDOCS_MCP_CONFIG</code>, существует ли файл.</td><td>Bearer если задан <code>SDOCS_MCP_UI_TOKEN</code>; rate limit.</td><td>—</td></tr>
+      <tr><td><code>/api/status</code></td><td>GET</td><td>JSON проверок postgres/redis/kafka/… + kafka_queue + rate limiter.</td><td>Bearer при UI token; rate limit.</td><td>Те же проверки, что частично на дашборде.</td></tr>
+      <tr><td><code>/api/dashboard-stats</code></td><td>GET</td><td>JSON агрегат для главной страницы (модули, телеметрия UI, ROI-поля).</td><td>Bearer при UI token; rate limit.</td><td>Используется дашбордом.</td></tr>
+      <tr><td><code>/api/mcp/tools</code></td><td>GET</td><td>JSON списка MCP tools (имя, описание, схема).</td><td>Bearer при UI token; rate limit.</td><td>Справочник.</td></tr>
+      <tr><td><code>/api/mcp/invoke</code></td><td>POST</td><td>Вызов одного tool с фиксированными аргументами из allowlist UI.</td><td>Bearer при UI token; <strong>требуется</strong> <code>SDOCS_MCP_UI_ENABLE_INVOKE=true</code>.</td><td>Allowlist жёстко в коде (<code>_INVOKE_ALLOWLIST</code>).</td></tr>
+      <tr><td><code>/api/seed</code></td><td>POST</td><td>Тестовые записи в Postgres/Redis/OS/Kafka.</td><td>Bearer при UI token; <strong>требуется</strong> <code>SDOCS_MCP_UI_ENABLE_SEED=true</code>.</td><td>Опасно в проде — держать выкл.</td></tr>
+      <tr><td><code>/api/postgres-allowlist</code></td><td>GET</td><td>JSON каталога <code>query_id</code> без SQL текста.</td><td>Bearer при UI token; rate limit.</td><td>Для операторов и внешних клиентов по id.</td></tr>
+      <tr><td><code>/metrics</code></td><td>GET</td><td>Prometheus text exposition (модули up, latency, kafka retained, счётчики UI).</td><td>Опционально Bearer (<code>SDOCS_MCP_METRICS_TOKEN</code> или UI token при <code>SDOCS_MCP_METRICS_ACCEPT_UI_BEARER</code>); rate limit; при <code>SDOCS_MCP_METRICS_REQUIRE_TOKEN=true</code> секрет обязателен.</td><td>Не кладите секрет в query string.</td></tr>
+    </tbody>
+  </table>
+  <p class="small">Если задан <code>SDOCS_MCP_UI_TRUSTED_HOSTS</code>, включается Starlette <code>TrustedHostMiddleware</code> — запросы с чужим заголовком <code>Host</code> отклоняются.</p>
+
+  <h2 id="embed">5. Встроенный MCP на <code>{base}/mcp</code></h2>
+  <p>При <code>SDOCS_MCP_EMBED_MCP=true</code> (значение по умолчанию в Docker-образе UI) на том же порту, что и UI, монтируется приложение Streamable HTTP MCP по пути <code>/mcp</code> или <code>&lt;SDOCS_MCP_UI_BASE_PATH&gt;/mcp</code>, если задан префикс UI (в коде: <code>build_mcp(cfg, streamable_http_path="/")</code> + <code>app.mount(...)</code>). Клиенты MCP подключаются к URL вида <code>http(s)://&lt;host&gt;:&lt;ui-port&gt;/mcp</code> или с префиксом.</p>
+  <p><strong>Выключить встроенный MCP:</strong> <code>SDOCS_MCP_EMBED_MCP=false</code> и запускать отдельный процесс <code>sdocs-mcp</code> на порту <code>SDOCS_MCP_PORT</code> (по умолчанию 8765).</p>
+  <div class="note">При <code>SDOCS_MCP_UI_WORKERS&gt;1</code> и встроенном MCP без <code>SDOCS_MCP_STATELESS_HTTP=true</code> сессии Streamable HTTP могут ломаться — см. предупреждение в логах UI.</div>
+
+  <h2 id="tls">6. TLS и mTLS (сервер MCP и UI)</h2>
+  <p><strong>По умолчанию</strong> и UI, и процесс <code>sdocs-mcp</code> слушают <strong>обычный HTTP</strong> без TLS.</p>
+  <p><strong>Включить HTTPS + обязательный клиентский сертификат (mTLS)</strong> для uvicorn: задать одновременно все переменные (пути к существующим файлам):</p>
+  <ul>
+    <li><code>SDOCS_MCP_MTLS_CERT_FILE</code> — серверный сертификат (CRT)</li>
+    <li><code>SDOCS_MCP_MTLS_KEY_FILE</code> — приватный ключ (KEY)</li>
+    <li><code>SDOCS_MCP_MTLS_ROOT_CA_FILE</code> — CA для проверки <strong>клиентских</strong> сертификатов</li>
+    <li>опционально <code>SDOCS_MCP_MTLS_KEY_PASSWORD</code> — пароль к зашифрованному ключу</li>
+  </ul>
+  <p>Реализация: <code>resolve_mcp_mtls_uvicorn_kwargs()</code> в <code>mtls.py</code> — при неполном наборе переменных или отсутствии файлов возвращается <code>None</code> и в лог пишется предупреждение; сервер остаётся на <strong>HTTP</strong>.</p>
+  <p><strong>Выключить mTLS/TLS:</strong> снять или очистить любую из трёх обязательных переменных <code>SDOCS_MCP_MTLS_*</code> (или удалить файлы) и перезапустить процесс — снова будет plain HTTP.</p>
+  <p>Для отдельного процесса <code>sdocs-mcp</code> используется тот же механизм в <code>server.py</code> (uvicorn с ssl kwargs).</p>
+
+  <h2 id="client-mtls">7. Клиентский mTLS к бэкендам (PostgreSQL, Redis, Kafka, Prometheus, OpenSearch)</h2>
+  <p>Задаётся в YAML модуля: либо <strong>все три</strong> поля <code>mtls_cert_file</code>, <code>mtls_key_file</code>, <code>mtls_root_ca_file</code> (и опционально <code>mtls_key_password</code>), либо ни одного. Иначе клиент ходит к бэкенду как раньше (plain/TLS по URL/настройкам модуля). Для Redis при клиентском mTLS URL должен быть <code>rediss://</code>. Комментарии в <code>config.example.yaml</code> § строки 13–17.</p>
+
+  <h2 id="config">8. Конфигурация YAML (обзор)</h2>
+  <p>Файл конфигурации задаётся через <code>SDOCS_MCP_CONFIG</code> (если переменная не задана или файл отсутствует, используется пустой YAML — значения по умолчанию из <code>AppConfig</code>). Основные секции: <code>modules.postgres</code>, <code>modules.redis</code>, <code>modules.kafka</code>, <code>modules.mail</code>, <code>modules.opensearch</code> (+ <code>rag</code>, <code>tool_call_audit</code>), <code>modules.prometheus</code>, <code>modules.ssh</code>. Шаблоны: <code>config.example.yaml</code>, <code>config.docker.yaml</code>, <code>config.integrated.example.yaml</code>, <code>deploy/config.production.example.yaml</code>.</p>
+  <p>Дополнительный список SSH-хостов: файл по переменной <code>SDOCS_MCP_SSH_HOSTS_FILE</code> (см. <code>docs/SSH_SCALE.md</code>).</p>
+
+  <h2 id="env">9. Переменные окружения</h2>
+  <p>Ниже — переменные с префиксом проекта и важные для Docker; имена секретов для почты/SSH задаются <strong>в YAML</strong> (<code>*_env</code>), значения — в окружении ОС, не обязательно с префиксом <code>SDOCS_MCP_</code>.</p>
+  <table>
+    <thead>
+      <tr><th>Переменная</th><th>Где используется</th><th>По умолчанию</th><th>Описание</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>SDOCS_MCP_CONFIG</code></td><td><code>sdocs-mcp</code>, UI, <code>/ready</code></td><td>пусто</td><td>Абсолютный путь к YAML; если не задан или файл отсутствует — пустой конфиг и значения по умолчанию.</td></tr>
+      <tr><td><code>SDOCS_MCP_SSH_HOSTS_FILE</code></td><td>загрузка конфига</td><td>пусто</td><td>Дополнительный YAML со списком SSH-хостов (дополняет основной файл).</td></tr>
+      <tr><td><code>SDOCS_MCP_TRANSPORT</code></td><td><code>sdocs-mcp</code></td><td><code>streamable-http</code></td><td><code>streamable-http</code>, <code>sse</code> или <code>stdio</code> (stdio только с <code>SDOCS_MCP_DEV_LOCAL=true</code>).</td></tr>
+      <tr><td><code>SDOCS_MCP_HOST</code></td><td><code>sdocs-mcp</code></td><td><code>0.0.0.0</code></td><td>Слушатель HTTP MCP. <code>127.0.0.1</code>/<code>localhost</code>/<code>::1</code> без <code>SDOCS_MCP_DEV_LOCAL=true</code> — запрещено (выход с ошибкой).</td></tr>
+      <tr><td><code>SDOCS_MCP_PORT</code></td><td><code>sdocs-mcp</code></td><td><code>8765</code></td><td>Порт HTTP MCP.</td></tr>
+      <tr><td><code>SDOCS_MCP_DEV_LOCAL</code></td><td><code>sdocs-mcp</code></td><td>выкл.</td><td><code>true</code>: разрешить localhost binding и транспорт <code>stdio</code> для локальной отладки.</td></tr>
+      <tr><td><code>SDOCS_MCP_STATELESS_HTTP</code></td><td>FastMCP / UI embed</td><td>выкл.</td><td><code>true</code>: stateless Streamable HTTP (несколько воркеров/реплик без sticky).</td></tr>
+      <tr><td><code>SDOCS_MCP_MTLS_CERT_FILE</code></td><td>UI, MCP</td><td>пусто</td><td>Путь к серверному сертификату для mTLS.</td></tr>
+      <tr><td><code>SDOCS_MCP_MTLS_KEY_FILE</code></td><td>UI, MCP</td><td>пусто</td><td>Путь к ключу сервера.</td></tr>
+      <tr><td><code>SDOCS_MCP_MTLS_ROOT_CA_FILE</code></td><td>UI, MCP</td><td>пусто</td><td>CA для проверки клиентских сертификатов.</td></tr>
+      <tr><td><code>SDOCS_MCP_MTLS_KEY_PASSWORD</code></td><td>UI, MCP</td><td>пусто</td><td>Пароль к зашифрованному ключу (опционально).</td></tr>
+      <tr><td><code>SDOCS_MCP_AUDIT_CALLER_ID</code></td><td>аудит tool calls</td><td>пусто</td><td>Подстановка caller_id, если нет заголовка из конфига (HTTP/stdio).</td></tr>
+      <tr><td><code>SDOCS_MCP_AUDIT_INSTANCE_ID</code></td><td>аудит tool calls</td><td>пусто</td><td>Идентификатор инстанса в документе аудита (приоритет над YAML <code>instance_id</code>).</td></tr>
+      <tr><td><code>SDOCS_MCP_EMBED_MCP</code></td><td>UI</td><td>в образе часто <code>true</code></td><td>Встроить MCP на <code>/mcp</code> или <code>&lt;UI_BASE&gt;/mcp</code> того же порта.</td></tr>
+      <tr><td><code>SDOCS_MCP_UI_BASE_PATH</code></td><td>UI (импорт модуля)</td><td>пусто / <code>/</code></td><td>Префикс URL для всего веба и встроенного MCP (например <code>/mcp-server</code>).</td></tr>
+      <tr><td><code>SDOCS_MCP_UI_TRUSTED_HOSTS</code></td><td>UI</td><td>пусто</td><td>Список допустимых <code>Host</code> через запятую (middleware).</td></tr>
+      <tr><td><code>SDOCS_MCP_UI_TOKEN</code></td><td>UI</td><td>пусто</td><td>Если непустой — для <code>/api/*</code> нужен <code>Authorization: Bearer …</code>.</td></tr>
+      <tr><td><code>SDOCS_MCP_UI_ENABLE_INVOKE</code></td><td>UI</td><td><code>false</code></td><td><code>true</code> — разрешить POST <code>/api/mcp/invoke</code>.</td></tr>
+      <tr><td><code>SDOCS_MCP_UI_ENABLE_SEED</code></td><td>UI</td><td><code>false</code></td><td><code>true</code> — разрешить POST <code>/api/seed</code>.</td></tr>
+      <tr><td><code>SDOCS_MCP_UI_RATE_LIMIT_RPM</code></td><td>UI</td><td><code>60</code></td><td>Лимит запросов на IP в минуту для защищённых API.</td></tr>
+      <tr><td><code>SDOCS_MCP_UI_AUDIT_LOG_PATH</code></td><td>UI</td><td><code>logs/ui-audit.log</code></td><td>Путь JSONL аудита UI (относительно cwd или абсолютный).</td></tr>
+      <tr><td><code>SDOCS_MCP_METRICS_TOKEN</code></td><td>UI</td><td>пусто</td><td>Секрет для доступа к <code>/metrics</code> (Bearer).</td></tr>
+      <tr><td><code>SDOCS_MCP_METRICS_REQUIRE_TOKEN</code></td><td>UI</td><td><code>false</code></td><td><code>true</code> — без валидного секрета <code>/metrics</code> недоступен; при этом токен должен быть непустым.</td></tr>
+      <tr><td><code>SDOCS_MCP_METRICS_ACCEPT_UI_BEARER</code></td><td>UI</td><td><code>false</code></td><td><code>true</code> — принимать Bearer UI-токена для <code>/metrics</code>.</td></tr>
+      <tr><td><code>SDOCS_MCP_METRICS_RATE_LIMIT_RPM</code></td><td>UI</td><td><code>120</code></td><td>Rate limit для <code>/metrics</code> по IP.</td></tr>
+      <tr><td><code>SDOCS_MCP_UI_HOST</code></td><td>UI</td><td><code>127.0.0.1</code></td><td>Адрес привязки uvicorn.</td></tr>
+      <tr><td><code>SDOCS_MCP_UI_PORT</code></td><td>UI</td><td><code>8888</code></td><td>Порт UI.</td></tr>
+      <tr><td><code>SDOCS_MCP_UI_WORKERS</code></td><td>UI</td><td><code>1</code></td><td>Число воркеров uvicorn.</td></tr>
+      <tr><td><code>SDOCS_MCP_LOG_LEVEL</code></td><td>UI</td><td><code>info</code></td><td>Уровень логов uvicorn.</td></tr>
+      <tr><td><code>SDOCS_MCP_CONFIG_HOST_PATH</code></td><td>Docker Compose</td><td>—</td><td>Путь к YAML на хосте для bind-mount (см. <code>deploy/docker-compose.prod.yml</code>).</td></tr>
+      <tr><td><code>SDOCS_MCP_UI_BIND</code></td><td>Docker Compose</td><td><code>127.0.0.1</code></td><td>На каком адресе хоста публиковать порт контейнера.</td></tr>
+      <tr><td><code>SDOCS_MCP_IMAGE_TAG</code></td><td>Compose / деплой</td><td>например <code>0.4.0</code></td><td>Тег образа <code>sdocs-mcp-ui</code>.</td></tr>
+    </tbody>
+  </table>
+  <p class="small">Переменные вида <code>SDOCS_MCP_MAIL_IMAP_PASSWORD</code> и т.п. — это <strong>примеры имён</strong>, задаваемых в YAML как <code>imap_password_env</code> / <code>password_env</code> у SSH и др.; префикс не обязан быть <code>SDOCS_MCP_</code>, но в примерах репозитория так удобно помечать секреты приложения.</p>
+
+  <p class="small" style="margin-top:2rem;">Конец документа. При расхождении с кодом приоритет у исходников в репозитории.</p>
+</main>
+</body>
+</html>

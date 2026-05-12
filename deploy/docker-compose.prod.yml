@@ -9,7 +9,7 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile
-    image: sdocs-mcp-ui:${SDOCS_MCP_IMAGE_TAG:-0.3.2}
+    image: sdocs-mcp-ui:${SDOCS_MCP_IMAGE_TAG:-0.4.0}
     restart: unless-stopped
     env_file:
       - .env

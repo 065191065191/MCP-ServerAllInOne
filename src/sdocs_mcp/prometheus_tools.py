@@ -91,7 +91,8 @@ def prometheus_query_instant(cfg: PrometheusModuleConfig, query: str, at_time: s
     if at_time is not None:
         params["time"] = at_time
     data = _get_json(cfg, "/api/v1/query", params)
-    data = _truncate_instant_data(data, cfg.max_vector_samples)
+    if cfg.truncate_responses:
+        data = _truncate_instant_data(data, cfg.max_vector_samples)
     return json.dumps(data, indent=2, ensure_ascii=False)
 
 
@@ -123,7 +124,8 @@ def prometheus_query_range(
         step = str(step_f)
     params = {"query": query, "start": start, "end": end, "step": step}
     data = _get_json(cfg, "/api/v1/query_range", params)
-    data = _truncate_matrix_data(data, cfg.max_matrix_series, cfg.max_points_per_series)
+    if cfg.truncate_responses:
+        data = _truncate_matrix_data(data, cfg.max_matrix_series, cfg.max_points_per_series)
     if points > cfg.max_step_points:
         data["_adjusted_step"] = step
         data["_adjusted_note"] = "step widened to respect max_step_points"
@@ -167,7 +169,7 @@ def prometheus_series(
         r = client.get("/api/v1/series", params=q)
         r.raise_for_status()
         data = r.json()
-    if isinstance(data.get("data"), list) and len(data["data"]) > cfg.max_series_matches:
+    if cfg.truncate_responses and isinstance(data.get("data"), list) and len(data["data"]) > cfg.max_series_matches:
         data["_truncated"] = True
         data["data"] = data["data"][: cfg.max_series_matches]
     return json.dumps(data, indent=2, ensure_ascii=False)

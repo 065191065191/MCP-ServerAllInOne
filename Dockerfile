@@ -1,5 +1,5 @@
-﻿# См. deploy/Dockerfile — канонический прод-образ (UI + бинарники MCP), тег sdocs-mcp-ui:0.3.2.
-# Из корня: docker build -f deploy/Dockerfile -t sdocs-mcp-ui:0.3.2 .  |  из этого файла: docker build -t sdocs-mcp-ui:0.3.2 .
+﻿# См. deploy/Dockerfile — канонический прод-образ (UI + бинарники MCP), тег sdocs-mcp-ui:0.4.0.
+# Из корня: docker build -f deploy/Dockerfile -t sdocs-mcp-ui:0.4.0 .  |  из этого файла: docker build -t sdocs-mcp-ui:0.4.0 .
 
 ARG BASE_IMAGE=python:3.12-slim-bookworm
 FROM ${BASE_IMAGE}
@@ -40,7 +40,7 @@ RUN pip install --no-cache-dir --upgrade pip \
 
 USER sdocsmcp
 LABEL org.opencontainers.image.title="SDocsMCP"
-LABEL org.opencontainers.image.version="0.3.2"
+LABEL org.opencontainers.image.version="0.4.0"
 
 # Опционально при запуске контейнера: SDOCS_MCP_STATELESS_HTTP=true — см. README.
 ENV PYTHONUNBUFFERED=1 \

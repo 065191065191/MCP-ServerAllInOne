@@ -102,7 +102,7 @@ def _register_postgres(mcp: FastMCP, cfg: PostgresModuleConfig) -> None:
 
         @mcp.tool()
         def postgres_allowlisted_query(query_id: str) -> str:
-            """Run one SELECT from config allowlist by query_id (MCP cron passes id only, not raw SQL)."""
+            """Run one SELECT from config allowlist by query_id (clients pass id only, not raw SQL)."""
             return postgres_tools.postgres_allowlisted_query(cfg, query_id)
 
 
@@ -402,14 +402,12 @@ def _register_opensearch(mcp: FastMCP, cfg: OpenSearchModuleConfig) -> None:
                 return opensearch_rag_tools.opensearch_rag_delete_document(cfg, index, doc_id)
 
 
-def _register_ssh_command_policy(mcp: FastMCP, cfg: SshModuleConfig) -> None:
+def _register_ssh(mcp: FastMCP, cfg: SshModuleConfig) -> None:
     @mcp.tool()
     def ssh_command_policy() -> str:
         """Политика ssh_run_command: forbidden_substrings, forbidden_regex, правила shell-операторов, лимит длины (из config + кода)."""
         return ssh_tools.ssh_command_policy(cfg)
 
-
-def _register_ssh(mcp: FastMCP, cfg: SshModuleConfig) -> None:
     @mcp.tool()
     def ssh_hosts_overview() -> str:
         """Список SSH-хостов из конфига: id, hostname, port, username, description (без секретов)."""
@@ -433,7 +431,7 @@ def build_mcp(
         "Only enabled backends register tools. "
         "PostgreSQL: fixed diagnostic queries; optional allowlisted_queries in config — "
         "postgres_allowlisted_query(query_id) runs only ids from postgres_allowlisted_query_catalog (no raw SQL from clients). "
-        "ssh_command_policy lists SSH command blocks from config and code."
+        "When modules.ssh.enabled, ssh_command_policy exposes SSH command rules."
     )
     if app.modules.opensearch.enabled and app.modules.opensearch.rag.enabled:
         _instr += (
@@ -506,7 +504,6 @@ def build_mcp(
             app.modules.prometheus,
             app.modules.kafka if app.modules.kafka.enabled else None,
         )
-    _register_ssh_command_policy(mcp, app.modules.ssh)
     if app.modules.ssh.enabled:
         _register_ssh(mcp, app.modules.ssh)
     return mcp

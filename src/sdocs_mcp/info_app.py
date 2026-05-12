@@ -14,7 +14,7 @@ from typing import Any
 import httpx
 import psycopg
 import uvicorn
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import APIRouter, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from kafka import KafkaConsumer, TopicPartition
 from starlette.middleware.trustedhost import TrustedHostMiddleware
@@ -34,6 +34,7 @@ from sdocs_mcp.redis_tools import redis_ping, redis_setex
 from sdocs_mcp.server import build_mcp
 from sdocs_mcp.tool_audit_http_context import ToolAuditCallerMiddleware
 from sdocs_mcp.ui_nav import inject_subpage
+from sdocs_mcp.ui_paths import normalize_ui_base_path
 
 # Безопасный список: только чтение / диагностика + статус (без произвольного SQL и т.д.).
 _INVOKE_ALLOWLIST: dict[str, dict[str, Any] | None] = {
@@ -50,10 +51,12 @@ _INVOKE_ALLOWLIST: dict[str, dict[str, Any] | None] = {
     "kafka_list_topics": {},
     "kafka_describe_topic": {"topic": "demo.events"},
     "kafka_consume_recent": {"topic": "demo.events", "partition": 0, "max_messages": 5},
-    "ssh_command_policy": {},
 }
 
-app = FastAPI(title="SDocsMCP UI", version="0.3.2")
+UI_BASE = normalize_ui_base_path()
+
+app = FastAPI(title="SDocsMCP UI", version="0.4.0")
+web_router = APIRouter()
 
 _trusted_hosts_raw = (os.environ.get("SDOCS_MCP_UI_TRUSTED_HOSTS") or "").strip()
 if _trusted_hosts_raw:
@@ -61,28 +64,6 @@ if _trusted_hosts_raw:
     if _trusted_hosts:
         app.add_middleware(TrustedHostMiddleware, allowed_hosts=_trusted_hosts)
 
-
-def _embed_sdocs_mcp_if_enabled() -> None:
-    """Один порт с UI: Streamable HTTP MCP на пути /mcp (SDOCS_MCP_EMBED_MCP=true)."""
-    if (os.environ.get("SDOCS_MCP_EMBED_MCP") or "").strip().lower() not in ("1", "true", "yes"):
-        return
-    cfg = load_config()
-    os_mod = cfg.modules.opensearch
-    if os_mod.enabled and os_mod.tool_call_audit.enabled:
-        app.add_middleware(
-            ToolAuditCallerMiddleware,
-            audit_cfg=os_mod.tool_call_audit,
-            path_prefix="/mcp",
-        )
-    mcp = build_mcp(cfg, streamable_http_path="/")
-    app.mount("/mcp", mcp.streamable_http_app())
-    logging.getLogger("sdocs_mcp.ui").info(
-        "Embedded sdocs-mcp: Streamable HTTP on same port as UI at path /mcp "
-        "(set SDOCS_MCP_EMBED_MCP=false to run sdocs-mcp on a separate port)."
-    )
-
-
-_embed_sdocs_mcp_if_enabled()
 
 _API_TOKEN = (os.environ.get("SDOCS_MCP_UI_TOKEN") or "").strip()
 _ENABLE_INVOKE = os.environ.get("SDOCS_MCP_UI_ENABLE_INVOKE", "false").strip().lower() == "true"
@@ -293,12 +274,6 @@ def _rate_limiter_window_stats() -> dict[str, int]:
 
 
 def _cfg() -> AppConfig:
-    path = os.environ.get("SDOCS_MCP_CONFIG", "")
-    if not path or not os.path.isfile(path):
-        raise HTTPException(
-            status_code=500,
-            detail="Set SDOCS_MCP_CONFIG to an existing yaml (e.g. config.docker.yaml).",
-        )
     return load_config()
 
 
@@ -592,21 +567,15 @@ def _kafka_queue_load(cfg: AppConfig) -> dict[str, Any]:
         return {"ok": False, "detail": str(e)}
 
 
-@app.get("/health")
+@web_router.get("/health")
 async def health() -> PlainTextResponse:
     """Liveness: без конфига и без авторизации (Docker/Kubernetes)."""
     return PlainTextResponse("ok", status_code=200)
 
 
-@app.get("/ready")
+@web_router.get("/ready")
 async def ready() -> JSONResponse:
-    """Readiness: конфиг существует и парсится."""
-    path = os.environ.get("SDOCS_MCP_CONFIG", "")
-    if not path or not os.path.isfile(path):
-        return JSONResponse(
-            {"status": "not_ready", "detail": "SDOCS_MCP_CONFIG missing or not a file"},
-            status_code=503,
-        )
+    """Readiness: конфиг парсится (файл опционален — используются значения по умолчанию)."""
     try:
         load_config()
     except Exception as e:
@@ -614,22 +583,22 @@ async def ready() -> JSONResponse:
     return JSONResponse({"status": "ready"})
 
 
-@app.get("/", response_class=HTMLResponse)
+@web_router.get("/", response_class=HTMLResponse)
 async def index() -> str:
     return DASHBOARD_HTML
 
 
-@app.get("/dashboard", response_class=HTMLResponse)
+@web_router.get("/dashboard", response_class=HTMLResponse)
 async def executive_dashboard() -> str:
     return DASHBOARD_HTML
 
 
-@app.get("/ops", response_class=HTMLResponse)
+@web_router.get("/ops", response_class=HTMLResponse)
 async def ops_console() -> str:
     return _OPS_HTML
 
 
-@app.get("/api/dashboard-stats")
+@web_router.get("/api/dashboard-stats")
 async def api_dashboard_stats(req: Request) -> JSONResponse:
     """Агрегат для главного дашборда: реальные проверки модулей и телеметрия UI."""
     started = time.perf_counter()
@@ -644,7 +613,7 @@ async def api_dashboard_stats(req: Request) -> JSONResponse:
         _record_request_timing(started, ok)
 
 
-@app.get("/api/auth-config")
+@web_router.get("/api/auth-config")
 async def api_auth_config() -> JSONResponse:
     """Публично: нужен ли Bearer для /api/* и /metrics (для подсказок в UI)."""
     return JSONResponse(
@@ -655,7 +624,7 @@ async def api_auth_config() -> JSONResponse:
     )
 
 
-@app.get("/api/config-path")
+@web_router.get("/api/config-path")
 async def api_config_path(req: Request) -> JSONResponse:
     started = time.perf_counter()
     ok = False
@@ -668,7 +637,7 @@ async def api_config_path(req: Request) -> JSONResponse:
         _record_request_timing(started, ok)
 
 
-@app.get("/api/status")
+@web_router.get("/api/status")
 async def api_status(req: Request) -> JSONResponse:
     started = time.perf_counter()
     ok = False
@@ -709,7 +678,7 @@ async def api_status(req: Request) -> JSONResponse:
         _record_request_timing(started, ok)
 
 
-@app.get("/metrics")
+@web_router.get("/metrics")
 async def prometheus_metrics(req: Request) -> PlainTextResponse:
     """Prometheus scrape endpoint with MCP/UI status and queue gauges."""
     _secure_metrics(req)
@@ -796,7 +765,7 @@ async def prometheus_metrics(req: Request) -> PlainTextResponse:
     return PlainTextResponse("\n".join(lines) + "\n", media_type="text/plain; version=0.0.4")
 
 
-@app.get("/api/mcp/tools")
+@web_router.get("/api/mcp/tools")
 async def api_mcp_tools(req: Request) -> JSONResponse:
     started = time.perf_counter()
     ok = False
@@ -832,7 +801,7 @@ def _tool_result_pack(call_out: Any) -> dict[str, Any]:
     }
 
 
-@app.post("/api/mcp/invoke")
+@web_router.post("/api/mcp/invoke")
 async def api_mcp_invoke(req: Request, body: dict[str, Any]) -> JSONResponse:
     started = time.perf_counter()
     ok = False
@@ -876,7 +845,7 @@ async def api_mcp_invoke(req: Request, body: dict[str, Any]) -> JSONResponse:
         _record_request_timing(started, ok)
 
 
-@app.post("/api/seed")
+@web_router.post("/api/seed")
 async def api_seed(req: Request) -> JSONResponse:
     """Реальные записи в сервисы (не мок): Postgres INSERT, Redis SET, OpenSearch index, Kafka produce."""
     started = time.perf_counter()
@@ -968,24 +937,14 @@ async def api_seed(req: Request) -> JSONResponse:
         _record_request_timing(started, ok)
 
 
-@app.get("/status-page", response_class=HTMLResponse)
+@web_router.get("/status-page", response_class=HTMLResponse)
 async def status_page() -> str:
     return _STATUS_HTML
 
 
-@app.get("/cron-page", response_class=HTMLResponse)
-async def cron_page() -> str:
-    return _CRON_HTML
-
-
-@app.get("/cron", response_class=HTMLResponse)
-async def cron_page_short() -> str:
-    return _CRON_HTML
-
-
-@app.get("/api/postgres-allowlist")
+@web_router.get("/api/postgres-allowlist")
 async def api_postgres_allowlist(req: Request) -> JSONResponse:
-    """Список query_id из modules.postgres.allowlisted_queries (без текста SQL) — для крона и обзора в UI."""
+    """Список query_id из modules.postgres.allowlisted_queries (без текста SQL) — для обзора и внешних вызовов по id."""
     started = time.perf_counter()
     ok = False
     try:
@@ -1009,7 +968,7 @@ async def api_postgres_allowlist(req: Request) -> JSONResponse:
                     "postgres_enabled": True,
                     "allowlist_configured": False,
                     "queries": [],
-                    "detail": "allowlisted_queries пуст — добавьте именованные SELECT в YAML; крон передаёт только query_id",
+                    "detail": "allowlisted_queries пуст — добавьте именованные SELECT в YAML; клиенты передают только query_id",
                 }
             )
         catalog = json.loads(postgres_allowlisted_query_catalog(pg))
@@ -1026,12 +985,41 @@ async def api_postgres_allowlist(req: Request) -> JSONResponse:
         _record_request_timing(started, ok)
 
 
+app.include_router(web_router, prefix=UI_BASE)
+
+
+def _embed_sdocs_mcp_if_enabled() -> None:
+    """Один порт с UI: Streamable HTTP MCP на пути {base}/mcp (SDOCS_MCP_EMBED_MCP=true)."""
+    if (os.environ.get("SDOCS_MCP_EMBED_MCP") or "").strip().lower() not in ("1", "true", "yes"):
+        return
+    cfg = load_config()
+    os_mod = cfg.modules.opensearch
+    mcp_path = f"{UI_BASE}/mcp" if UI_BASE else "/mcp"
+    if os_mod.enabled and os_mod.tool_call_audit.enabled:
+        app.add_middleware(
+            ToolAuditCallerMiddleware,
+            audit_cfg=os_mod.tool_call_audit,
+            path_prefix=mcp_path,
+        )
+    mcp = build_mcp(cfg, streamable_http_path="/")
+    app.mount(mcp_path, mcp.streamable_http_app())
+    logging.getLogger("sdocs_mcp.ui").info(
+        "Embedded sdocs-mcp: Streamable HTTP on same port as UI at path %s "
+        "(set SDOCS_MCP_EMBED_MCP=false to run sdocs-mcp on a separate port).",
+        mcp_path,
+    )
+
+
+_embed_sdocs_mcp_if_enabled()
+
+
 _OPS_HTML_RAW = """<!DOCTYPE html>
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>sdocs-mcp — консоль</title>
+  <script>const __UI_BASE="{{UI_BASE_PATH}}";</script>
   <style>
 {{TOPNAV_STYLES}}
 {{SUBPAGE_SKIN}}
@@ -1271,7 +1259,7 @@ _OPS_HTML_RAW = """<!DOCTYPE html>
       <p class="section-note"><strong>kafka_queue</strong> — оценка объёма сообщений по allowlist (не замена мониторинга кластера). <strong>ui_rate_limiter</strong> — нагрузка на <code>/api/*</code>, не статус брокеров или БД.</p>
       <div class="row" id="status-aux"></div>
       <h2 class="section-title" style="margin-top:1.25rem;">Статус и /metrics</h2>
-      <p class="section-note">Тот же текст, что на странице <a href="/status-page" style="color:var(--accent);">/status-page</a> — сырой вывод для Prometheus; нужен токен метрик, если сервер его требует.</p>
+      <p class="section-note">Тот же текст, что на странице <a href="{{UI_BASE_PATH}}/status-page" style="color:var(--accent);">статус и метрики</a> — сырой вывод для Prometheus; нужен токен метрик, если сервер его требует.</p>
       <div class="btn-row" style="margin-bottom:0.5rem;">
         <button type="button" id="btn-metrics">Обновить превью экспозиции /metrics</button>
       </div>
@@ -1317,9 +1305,9 @@ _OPS_HTML_RAW = """<!DOCTYPE html>
       const m = ($('metrics-token').value || '').trim();
       return m ? { 'Authorization': 'Bearer ' + m } : {};
     }
-    async function jget(url) { const r = await fetch(url, { headers: authHeader() }); if (!r.ok) throw new Error(await r.text()); return r.json(); }
-    async function jpost(url, body) {
-      const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeader() }, body: JSON.stringify(body || {}) });
+    async function jget(path) { const r = await fetch(__UI_BASE + path, { headers: authHeader() }); if (!r.ok) throw new Error(await r.text()); return r.json(); }
+    async function jpost(path, body) {
+      const r = await fetch(__UI_BASE + path, { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeader() }, body: JSON.stringify(body || {}) });
       if (!r.ok) throw new Error(await r.text());
       return r.json();
     }
@@ -1403,7 +1391,7 @@ _OPS_HTML_RAW = """<!DOCTYPE html>
       aux.appendChild(card('ui_rate_limiter', s.ui_rate_limiter));
     }
     async function refreshMetricsPreview() {
-      const r = await fetch('/metrics', { headers: metricsAuthHeader() });
+      const r = await fetch(__UI_BASE + '/metrics', { headers: metricsAuthHeader() });
       const t = await r.text();
       if (!r.ok) throw new Error(t);
       $('metrics-preview').textContent = t;
@@ -1427,7 +1415,7 @@ _OPS_HTML_RAW = """<!DOCTYPE html>
     const allowed = [
       'sdocs_mcp_status','redis_ping','redis_info','redis_dbsize','postgres_connections_overview','postgres_database_sizes',
       'postgres_table_sizes','opensearch_cluster_health','opensearch_rag_policy','opensearch_list_indices','kafka_list_topics',
-      'kafka_describe_topic','kafka_consume_recent','ssh_command_policy'
+      'kafka_describe_topic','kafka_consume_recent'
     ];
     function buildInvokeButtons() {
       const host = $('invoke-buttons');
@@ -1448,7 +1436,7 @@ _OPS_HTML_RAW = """<!DOCTYPE html>
       $('metrics-token').value = savedM;
       $('metrics-token').onchange = () => localStorage.setItem('sdocs_mcp_metrics_token', $('metrics-token').value || '');
       try {
-        const ac = await fetch('/api/auth-config').then((r) => r.json());
+        const ac = await fetch(__UI_BASE + '/api/auth-config').then((r) => r.json());
         if (ac.ui_bearer_enabled) {
           $('auth-hint').textContent = 'Сейчас: для /api/* нужен Bearer (SDOCS_MCP_UI_TOKEN).';
         } else {
@@ -1499,6 +1487,7 @@ _STATUS_HTML_RAW = """<!DOCTYPE html>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Статус и /metrics — sdocs-mcp</title>
+  <script>const __UI_BASE="{{UI_BASE_PATH}}";</script>
   <style>
 {{TOPNAV_STYLES}}
 {{SUBPAGE_SKIN}}
@@ -1578,7 +1567,7 @@ _STATUS_HTML_RAW = """<!DOCTYPE html>
       return t ? { 'Authorization': 'Bearer ' + t } : {};
     }
     async function load() {
-      const r = await fetch('/metrics', { headers: metricsHeaders() });
+      const r = await fetch(__UI_BASE + '/metrics', { headers: metricsHeaders() });
       const t = await r.text();
       $('out').textContent = t;
     }
@@ -1599,139 +1588,8 @@ _STATUS_HTML_RAW = """<!DOCTYPE html>
 </html>
 """
 
-_CRON_HTML_RAW = """<!DOCTYPE html>
-<html lang="ru">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>sdocs-mcp — крон и allowlist Postgres</title>
-  <style>
-{{TOPNAV_STYLES}}
-{{SUBPAGE_SKIN}}
-    .page-head { padding-bottom: 1rem; margin-bottom: 1rem; border-bottom: 1px solid var(--border); }
-    .page-head h1 { margin: 0 0 0.5rem; font-size: 1.25rem; font-weight: 600; }
-    .panel {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 1rem 1.1rem;
-      margin-bottom: 1rem;
-    }
-    .muted { color: var(--muted); font-size: 0.9rem; margin: 0.4rem 0; }
-    ol { margin: 0.5rem 0 0; padding-left: 1.2rem; }
-    ol li { margin: 0.35rem 0; }
-    code {
-      font-family: ui-monospace, "Cascadia Code", "SF Mono", Consolas, monospace;
-      font-size: 0.85em;
-      padding: 0.1em 0.32em;
-      border-radius: 3px;
-      background: var(--accent-soft);
-    }
-    .field-label { display: block; font-size: 0.72rem; font-weight: 650; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin: 0.75rem 0 0.35rem; }
-    input[type="password"] {
-      width: min(480px, 100%);
-      padding: 0.5rem 0.7rem;
-      border-radius: var(--radius-sm);
-      border: 1px solid var(--border);
-      background: var(--surface2);
-      color: var(--text);
-      font-size: 0.9rem;
-    }
-    input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-    button {
-      margin-top: 0.75rem;
-      padding: 0.45rem 0.85rem;
-      border-radius: var(--radius-sm);
-      border: 1px solid var(--border);
-      background: var(--surface);
-      color: var(--text);
-      font-size: 0.86rem;
-      font-weight: 500;
-      cursor: pointer;
-    }
-    button:hover { border-color: var(--accent); background: var(--accent-soft); }
-    button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-    pre {
-      white-space: pre-wrap;
-      word-break: break-word;
-      background: var(--surface2);
-      padding: 0.75rem 0.9rem;
-      border-radius: var(--radius-sm);
-      border: 1px solid var(--border);
-      font-size: 0.78rem;
-      margin: 0.75rem 0 0;
-      max-height: min(60vh, 480px);
-      overflow: auto;
-    }
-  </style>
-</head>
-<body>
-  <div class="dashboard">
-  {{TOPNAV}}
-  <div class="subpage-content">
-  <header class="page-head">
-    <h1>Крон и именованные запросы Postgres</h1>
-    <p class="muted">В sdocs-mcp <strong>нет встроенного планировщика</strong>. Внешний крон (systemd, Kubernetes CronJob, CI) вызывает MCP-инструмент <code>postgres_allowlisted_query</code> с аргументом <code>query_id</code>. Текст SQL хранится только в <code>modules.postgres.allowlisted_queries</code> в YAML — клиенты и крон передают лишь id.</p>
-  </header>
-  <div class="panel">
-    <p class="muted"><strong>Как пользоваться</strong></p>
-    <ol>
-      <li>Администратор добавляет в конфиг записи <code>allowlisted_queries</code> с полями <code>id</code>, <code>sql</code>, <code>description</code>, <code>max_rows</code>.</li>
-      <li>Крон вызывает MCP (тот же процесс или отдельный <code>sdocs-mcp</code>): сначала при необходимости <code>postgres_allowlisted_query_catalog</code>, затем <code>postgres_allowlisted_query</code> с нужным <code>query_id</code>.</li>
-      <li>При <code>SDOCS_MCP_EMBED_MCP=true</code> Streamable HTTP обычно на <code>/mcp</code> этого же порта, что и UI.</li>
-    </ol>
-  </div>
-  <div class="panel">
-    <p class="muted">Каталог id (без текста SQL) доступен по <code>GET /api/postgres-allowlist</code> с тем же Bearer, что и для других <code>/api/*</code>, если задан <code>SDOCS_MCP_UI_TOKEN</code>.</p>
-    <label class="field-label" for="tok">SDOCS_MCP_UI_TOKEN (если требуется)</label>
-    <input id="tok" type="password" placeholder="Bearer для /api/*" autocomplete="off" />
-    <button type="button" id="btn">Загрузить каталог query_id</button>
-    <pre id="out">Нажмите «Загрузить»…</pre>
-  </div>
-  </div>
-  <div class="dashboard-footer">
-    <div>SDocsMCP · крон / allowlist</div>
-    <div class="theme-switch" id="themeToggle" role="button" tabindex="0" aria-label="Переключить светлую тему">
-      <span>☀</span>
-      <div class="toggle-track"><div class="toggle-thumb"></div></div>
-      <span>☾</span>
-    </div>
-  </div>
-  </div>
-  <script>
-    const $ = (id) => document.getElementById(id);
-    function h() {
-      const t = ($('tok').value || '').trim();
-      return t ? { 'Authorization': 'Bearer ' + t } : {};
-    }
-    $('tok').value = localStorage.getItem('sdocs_mcp_ui_token') || '';
-    $('tok').onchange = () => localStorage.setItem('sdocs_mcp_ui_token', $('tok').value || '');
-    $('btn').onclick = async () => {
-      $('out').textContent = '…';
-      try {
-        const r = await fetch('/api/postgres-allowlist', { headers: h() });
-        const txt = await r.text();
-        $('out').textContent = r.ok ? JSON.stringify(JSON.parse(txt), null, 2) : txt;
-      } catch (e) {
-        $('out').textContent = String(e);
-      }
-    };
-    (function () {
-      const tt = document.getElementById('themeToggle');
-      if (!tt) return;
-      tt.addEventListener('click', function () { document.body.classList.toggle('light'); });
-      tt.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); document.body.classList.toggle('light'); }
-      });
-    })();
-  </script>
-</body>
-</html>
-"""
-
 _OPS_HTML = inject_subpage(_OPS_HTML_RAW, "ops")
 _STATUS_HTML = inject_subpage(_STATUS_HTML_RAW, "status")
-_CRON_HTML = inject_subpage(_CRON_HTML_RAW, "cron")
 
 
 def main() -> None:

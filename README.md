@@ -45,7 +45,7 @@
 | `sdocs-mcp` | Только MCP по HTTP | `8765`, путь `/mcp` |
 | `sdocs-mcp-ui` | Дашборд, `/metrics`, опционально встроенный MCP | `8888` |
 
-- **Конфиг:** переменная **`SDOCS_MCP_CONFIG`** — абсолютный путь к YAML. Шаблоны: **`config.example.yaml`**, демо под Docker: **`config.docker.yaml`**, пример RAG + Kafka + Postgres + Redis: **`config.integrated.example.yaml`**.
+- **Конфиг:** опционально **`SDOCS_MCP_CONFIG`** — абсолютный путь к YAML. Если переменная не задана или файла нет, подставляется пустой YAML: работают **дефолты** `AppConfig` (в YAML указывайте только отличия). Шаблоны: **`config.example.yaml`**, демо под Docker: **`config.docker.yaml`**, пример RAG + Kafka + Postgres + Redis: **`config.integrated.example.yaml`**.
 - **Прод:** образы, Compose, OpenShift, systemd — **[`deploy/README.md`](deploy/README.md)**.
 - **Журнал изменений:** [`CHANGELOG.md`](CHANGELOG.md).
 
@@ -123,7 +123,7 @@ docker build \
   --build-arg HTTPS_PROXY="$HTTPS_PROXY" \
   --build-arg NO_PROXY="$NO_PROXY" \
   -f deploy/Dockerfile \
-  -t sdocs-mcp-ui:0.3.2 .
+  -t sdocs-mcp-ui:0.4.0 .
 ```
 
 ### Прокси с логином и паролем (секрет не в слоях образа)
@@ -136,14 +136,14 @@ printf '%s' 'http://USER:PASSWORD@proxy.example.corp:8080' > build-proxy.url
 DOCKER_BUILDKIT=1 docker build \
   --secret id=build_proxy,src=build-proxy.url \
   -f deploy/Dockerfile.buildkit-proxy \
-  -t sdocs-mcp-ui:0.3.2 .
+  -t sdocs-mcp-ui:0.4.0 .
 ```
 
 Dockerfile: **`deploy/Dockerfile.buildkit-proxy`**. Пример для Compose и **`NO_PROXY` для бэкендов** (OpenSearch, Kafka и т.д.) — в офлайн-доке.
 
 ### Перенос в изолированную сеть
 
-На машине со сборкой: `docker save sdocs-mcp-ui:0.3.2 -o sdocs-mcp-ui-0.3.2.tar` → перенос → на целевой площадке: `docker load -i ...`.
+На машине со сборкой: `docker save sdocs-mcp-ui:0.4.0 -o sdocs-mcp-ui-0.4.0.tar` → перенос → на целевой площадке: `docker load -i ...`.
 
 ---
 
@@ -154,7 +154,7 @@ Dockerfile: **`deploy/Dockerfile.buildkit-proxy`**. Пример для Compose 
 - **`SDOCS_MCP_STATELESS_HTTP=true`** — stateless Streamable HTTP (несколько воркеров UI / реплики без sticky). Иначе **`SDOCS_MCP_UI_WORKERS=1`**. В **`sdocs_mcp_status`** есть поле **`stateless_http`**.
 - Альтернатива: **`SDOCS_MCP_TRANSPORT=sse`**. **`stdio`** — только с **`SDOCS_MCP_DEV_LOCAL=true`**.
 
-**Аудит вызовов tools в OpenSearch:** `modules.opensearch.tool_call_audit.enabled: true` (нужен `opensearch.enabled`): 10 признаков классификации, `caller_id` / опционально IP, аргументы и ответ с лимитами. Подробнее: [`docs/TOOL_CALL_AUDIT.md`](docs/TOOL_CALL_AUDIT.md).
+**Аудит вызовов tools в OpenSearch:** `modules.opensearch.tool_call_audit.enabled: true` (нужен `opensearch.enabled`): журнал **вызовов MCP tools** (аргументы, ответ, длительность) — для разборов инцидентов; это не то же самое, что **RAG-память** (`opensearch_rag_*`). Подробнее: [`docs/TOOL_CALL_AUDIT.md`](docs/TOOL_CALL_AUDIT.md).
 
 ---
 
@@ -179,7 +179,9 @@ sdocs-mcp
 
 ## Веб-UI и один порт с MCP
 
-При **`SDOCS_MCP_EMBED_MCP=true`** процесс **`sdocs-mcp-ui`** отдаёт MCP на **`http://<хост>:<порт>/mcp`** на том же порту, что UI и `/metrics`. Либо **`SDOCS_MCP_UI_WORKERS=1`**, либо **`SDOCS_MCP_STATELESS_HTTP=true`** при большем числе воркеров или реплик.
+При **`SDOCS_MCP_EMBED_MCP=true`** процесс **`sdocs-mcp-ui`** отдаёт MCP на **`http://<хост>:<порт>/mcp`** (или **`http://<хост>:<порт><SDOCS_MCP_UI_BASE_PATH>/mcp`**, если задан префикс UI) на том же порту, что UI и `/metrics`. Либо **`SDOCS_MCP_UI_WORKERS=1`**, либо **`SDOCS_MCP_STATELESS_HTTP=true`** при большем числе воркеров или реплик.
+
+**Префикс путей веба:** **`SDOCS_MCP_UI_BASE_PATH`** (например `/mcp-server`) — единый префикс для `/health`, `/ready`, `/api/*`, `/metrics`, встроенного MCP и статических страниц. Пусто или `/` — без префикса (как раньше).
 
 **stdio по умолчанию отключён** без `SDOCS_MCP_DEV_LOCAL=true`.
 
@@ -191,7 +193,7 @@ sdocs-mcp
 - **Redis** — встроенный RESP2-клиент; чтение с лимитами, `SETEX` и опциональный `SCAN` по allowlist.
 - **Kafka** — только топики из `topic_allowlist`; produce/admin отдельными флагами.
 - **Почта** — IMAP/SMTP; пароли через env.
-- **OpenSearch** — cluster/cat/search и опционально **RAG** в allowlist-индексах.
+- **OpenSearch** — cluster/cat/search/count; по умолчанию без деструктивных API (`allow_write: false`). Опционально **RAG** в allowlist-индексах; **`modules.prometheus.truncate_responses`** по умолчанию `false` — большие ответы Prometheus не режутся на стороне MCP.
 
 Детали: [`docs/CAPABILITIES.md`](docs/CAPABILITIES.md).
 
@@ -265,4 +267,4 @@ export SDOCS_MCP_METRICS_RATE_LIMIT_RPM="120"
 
 **Автор:** Gos Stepan Ulievich.
 
-Версия: **`pyproject.toml`** → **`src/sdocs_mcp/__init__.py`** → метаданные UI; теги образов в **`deploy/*`**. Текущая: **0.3.2**. При изменениях — SemVer, обновление **`CHANGELOG.md`**, коммит. Пользовательская документация — **на русском** (`README.md`, `CHANGELOG.md`).
+Версия: **`pyproject.toml`** → **`src/sdocs_mcp/__init__.py`** → метаданные UI; теги образов в **`deploy/*`**. Текущая: **0.4.0**. При изменениях — SemVer, обновление **`CHANGELOG.md`**, коммит. Пользовательская документация — **на русском** (`README.md`, `CHANGELOG.md`).

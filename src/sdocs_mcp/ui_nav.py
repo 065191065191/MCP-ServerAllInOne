@@ -1,15 +1,16 @@
-"""Единая верхняя навигация веб-UI (дашборд, консоль, крон, метрики)."""
+"""Единая верхняя навигация веб-UI (дашборд, консоль, метрики)."""
 
 from __future__ import annotations
 
 from typing import Literal
 
-NavPage = Literal["dash", "ops", "cron", "status"]
+from sdocs_mcp.ui_paths import normalize_ui_base_path
+
+NavPage = Literal["dash", "ops", "status"]
 
 _NAV_LINKS: tuple[tuple[NavPage, str, str], ...] = (
     ("dash", "/", "Дашборд"),
     ("ops", "/ops", "Консоль"),
-    ("cron", "/cron-page", "Крон и allowlist Postgres"),
     ("status", "/status-page", "Статус и /metrics"),
 )
 
@@ -59,19 +60,26 @@ TOP_NAV_STYLES = """
 """
 
 
-def render_top_nav(current: NavPage) -> str:
+def _abs_href(ui_base: str, path: str) -> str:
+    if not path.startswith("/"):
+        path = "/" + path
+    return (ui_base + path) if ui_base else path
+
+
+def render_top_nav(current: NavPage, ui_base: str = "") -> str:
     parts: list[str] = [
         '<nav class="sdocs-mcp-topnav" aria-label="Разделы веб-интерфейса sdocs-mcp">'
     ]
     for i, (pid, href, label) in enumerate(_NAV_LINKS):
         if i:
             parts.append('<span class="sdocs-mcp-nav-sep" aria-hidden="true">·</span>')
+        full = _esc(_abs_href(ui_base, href))
         if pid == current:
             parts.append(
-                f'<a href="{href}" class="is-active" aria-current="page">{_esc(label)}</a>'
+                f'<a href="{full}" class="is-active" aria-current="page">{_esc(label)}</a>'
             )
         else:
-            parts.append(f'<a href="{href}">{_esc(label)}</a>')
+            parts.append(f'<a href="{full}">{_esc(label)}</a>')
     parts.append("</nav>")
     return "".join(parts)
 
@@ -87,7 +95,8 @@ def _esc(s: str) -> str:
 
 def inject_top_nav(html_fragment: str, current: NavPage) -> str:
     """Подставляет разметку навигации вместо маркера {{TOPNAV}} + добавляет стили {{TOPNAV_STYLES}} в <head>."""
-    out = html_fragment.replace("{{TOPNAV}}", render_top_nav(current))
+    base = normalize_ui_base_path()
+    out = html_fragment.replace("{{TOPNAV}}", render_top_nav(current, base))
     out = out.replace("{{TOPNAV_STYLES}}", TOP_NAV_STYLES)
     return out
 
@@ -226,5 +235,9 @@ SUBPAGE_SKIN_STYLES = """
 
 def inject_subpage(html_fragment: str, current: NavPage) -> str:
     """Дашборд-скин + topnav для вспомогательных HTML-страниц ({{SUBPAGE_SKIN}}, {{TOPNAV}}, {{TOPNAV_STYLES}})."""
-    out = html_fragment.replace("{{SUBPAGE_SKIN}}", SUBPAGE_SKIN_STYLES)
+    b = normalize_ui_base_path()
+    out = (
+        html_fragment.replace("{{SUBPAGE_SKIN}}", SUBPAGE_SKIN_STYLES)
+        .replace("{{UI_BASE_PATH}}", b)
+    )
     return inject_top_nav(out, current)
