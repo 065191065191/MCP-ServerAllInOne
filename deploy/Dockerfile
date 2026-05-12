@@ -1,5 +1,5 @@
 # Образ: веб UI + встроенный MCP Streamable HTTP на одном порту (8888, путь /mcp).
-# Сборка: docker build -f deploy/Dockerfile -t sdocs-mcp-ui:0.4.0 .
+# Сборка: docker build -f deploy/Dockerfile -t sdocs-mcp-ui:0.6.0 .
 #
 # Другой базовый образ (например UBI/RHEL с Python): передайте --build-arg BASE_IMAGE=...
 # Установка curl: apt-get | microdnf | dnf в зависимости от базы.

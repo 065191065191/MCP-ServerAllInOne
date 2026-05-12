@@ -123,7 +123,7 @@ docker build \
   --build-arg HTTPS_PROXY="$HTTPS_PROXY" \
   --build-arg NO_PROXY="$NO_PROXY" \
   -f deploy/Dockerfile \
-  -t sdocs-mcp-ui:0.4.0 .
+  -t sdocs-mcp-ui:0.6.0 .
 ```
 
 ### Прокси с логином и паролем (секрет не в слоях образа)
@@ -136,14 +136,14 @@ printf '%s' 'http://USER:PASSWORD@proxy.example.corp:8080' > build-proxy.url
 DOCKER_BUILDKIT=1 docker build \
   --secret id=build_proxy,src=build-proxy.url \
   -f deploy/Dockerfile.buildkit-proxy \
-  -t sdocs-mcp-ui:0.4.0 .
+  -t sdocs-mcp-ui:0.6.0 .
 ```
 
 Dockerfile: **`deploy/Dockerfile.buildkit-proxy`**. Пример для Compose и **`NO_PROXY` для бэкендов** (OpenSearch, Kafka и т.д.) — в офлайн-доке.
 
 ### Перенос в изолированную сеть
 
-На машине со сборкой: `docker save sdocs-mcp-ui:0.4.0 -o sdocs-mcp-ui-0.4.0.tar` → перенос → на целевой площадке: `docker load -i ...`.
+На машине со сборкой: `docker save sdocs-mcp-ui:0.6.0 -o sdocs-mcp-ui-0.6.0.tar` → перенос → на целевой площадке: `docker load -i ...`.
 
 ---
 
@@ -268,4 +268,4 @@ export SDOCS_MCP_METRICS_RATE_LIMIT_RPM="120"
 
 **Автор:** Gos Stepan Ulievich.
 
-Версия: **`pyproject.toml`** → **`src/sdocs_mcp/__init__.py`** → метаданные UI; теги образов в **`deploy/*`**. Текущая: **0.4.0**. При изменениях — SemVer, обновление **`CHANGELOG.md`**, коммит. Пользовательская документация — **на русском** (`README.md`, `CHANGELOG.md`).
+Версия: **`pyproject.toml`** → **`src/sdocs_mcp/__init__.py`** → метаданные UI; теги образов в **`deploy/*`**. Текущая: **0.6.0**. При изменениях — SemVer, обновление **`CHANGELOG.md`**, коммит. Пользовательская документация — **на русском** (`README.md`, `CHANGELOG.md`).

@@ -234,7 +234,7 @@
       <tr><td><code>SDOCS_MCP_LOG_LEVEL</code></td><td>UI</td><td><code>info</code></td><td>Уровень логов uvicorn.</td></tr>
       <tr><td><code>SDOCS_MCP_CONFIG_HOST_PATH</code></td><td>Docker Compose</td><td>—</td><td>Путь к YAML на хосте для bind-mount (см. <code>deploy/docker-compose.prod.yml</code>).</td></tr>
       <tr><td><code>SDOCS_MCP_UI_BIND</code></td><td>Docker Compose</td><td><code>127.0.0.1</code></td><td>На каком адресе хоста публиковать порт контейнера.</td></tr>
-      <tr><td><code>SDOCS_MCP_IMAGE_TAG</code></td><td>Compose / деплой</td><td>например <code>0.4.0</code></td><td>Тег образа <code>sdocs-mcp-ui</code>.</td></tr>
+      <tr><td><code>SDOCS_MCP_IMAGE_TAG</code></td><td>Compose / деплой</td><td>например <code>0.6.0</code></td><td>Тег образа <code>sdocs-mcp-ui</code>.</td></tr>
     </tbody>
   </table>
   <p class="small">Переменные вида <code>SDOCS_MCP_MAIL_IMAP_PASSWORD</code> и т.п. — это <strong>примеры имён</strong>, задаваемых в YAML как <code>imap_password_env</code> / <code>password_env</code> у SSH и др.; префикс не обязан быть <code>SDOCS_MCP_</code>, но в примерах репозитория так удобно помечать секреты приложения.</p>
