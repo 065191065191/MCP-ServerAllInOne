@@ -1,6 +1,9 @@
 # Образ: веб UI + встроенный MCP Streamable HTTP на одном порту (8888, путь /mcp).
 # Сборка: docker build -f deploy/Dockerfile -t sdocs-mcp-ui:0.6.0 .
 #
+# FastMCP (pydantic-settings) по умолчанию читает .env из WORKDIR → /app/.env.
+# Пустой читаемый файл в образе избегает падения при stat(), если снаружи не смонтирован недоступный .env.
+#
 # Другой базовый образ (например UBI/RHEL с Python): передайте --build-arg BASE_IMAGE=...
 # Установка curl: apt-get | microdnf | dnf в зависимости от базы.
 ARG BASE_IMAGE=python:3.12-slim-bookworm
@@ -38,6 +41,8 @@ COPY src ./src
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir . \
     && mkdir -p /app/data/logs \
+    && touch /app/.env \
+    && chmod 644 /app/.env \
     && chown -R sdocsmcp:sdocsmcp /app
 
 USER sdocsmcp

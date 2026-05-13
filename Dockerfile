@@ -1,5 +1,8 @@
 ﻿# См. deploy/Dockerfile — канонический прод-образ (UI + бинарники MCP), тег sdocs-mcp-ui:0.6.0.
 # Из корня: docker build -f deploy/Dockerfile -t sdocs-mcp-ui:0.6.0 .  |  из этого файла: docker build -t sdocs-mcp-ui:0.6.0 .
+#
+# FastMCP (pydantic-settings) по умолчанию читает .env из WORKDIR → /app/.env.
+# Пустой читаемый файл в образе избегает падения при stat(), если снаружи не смонтирован недоступный .env.
 
 ARG BASE_IMAGE=python:3.12-slim-bookworm
 FROM ${BASE_IMAGE}
@@ -36,6 +39,8 @@ COPY src ./src
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir . \
     && mkdir -p /app/data/logs \
+    && touch /app/.env \
+    && chmod 644 /app/.env \
     && chown -R sdocsmcp:sdocsmcp /app
 
 USER sdocsmcp
