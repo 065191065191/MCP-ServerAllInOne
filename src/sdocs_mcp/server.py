@@ -9,6 +9,15 @@ from typing import Any
 import anyio
 import uvicorn
 from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp.server import Settings as _FastMCPSettings
+from pydantic_settings import SettingsConfigDict
+
+# FastMCP по умолчанию включает pydantic-settings с env_file=".env" (cwd).
+# В контейнерах/OpenShift файл .env часто отсутствует или недоступен для stat() → падение при EMBED_MCP.
+# Отключаем чтение dotenv-файла; настройки FASTMCP_* по-прежнему берутся из os.environ.
+_fast_cfg = dict(_FastMCPSettings.model_config)
+_fast_cfg["env_file"] = None
+_FastMCPSettings.model_config = SettingsConfigDict(**_fast_cfg)
 
 from sdocs_mcp import (
     kafka_tools,

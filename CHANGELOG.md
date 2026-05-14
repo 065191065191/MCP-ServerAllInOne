@@ -7,7 +7,9 @@
 
 ### Изменено
 
-- **`Dockerfile`**, **`deploy/Dockerfile`**: в конце общего `RUN` после `pip install` создаётся пустой **`/app/.env`** (`chmod 644`, владелец через `chown -R`), чтобы FastMCP/pydantic-settings не падали на `PermissionError` при `stat` недоступного `.env` в `WORKDIR /app`.
+- **`src/sdocs_mcp/server.py`**: после импорта FastMCP отключается чтение dotenv-файла **`.env`** в настройках MCP (pydantic-settings), чтобы встроенный MCP (`SDOCS_MCP_EMBED_MCP=true`) не падал на `PermissionError` в средах с запретом доступа к `.env` в рабочем каталоге.
+- **`config.example.yaml`**: переписан как минимальный шаблон для копирования (5 модулей + mail), с комментариями «зачем» по каждому полю; полный референс остался в **`deploy/config.production.example.yaml`** и **`docs/CAPABILITIES.md`**.
+- **`Dockerfile`**, **`deploy/Dockerfile`**: в общем `RUN` после `pip install` создаётся пустой **`/app/.env`** (`chmod 644`, владелец через `chown -R`), чтобы при отсутствии патча в старых сборках снизить риск `PermissionError` на `stat(.env)`.
 - **`deploy/env.production.example`**: добавлены переменные почты **`SDOCS_MCP_MAIL_*`**, расширены пояснения к **`SDOCS_MCP_EMBED_MCP`**, **`SDOCS_MCP_STATELESS_HTTP`**, безопасности и аудиту.
 - Проект переименован в **SDocsMCP**: пакет Python `sdocs_mcp`, дистрибутив и CLI `sdocs-mcp` / `sdocs-mcp-ui`, переменные окружения с префиксом **`SDOCS_MCP_`**, systemd/OpenShift-манифесты `sdocs-mcp*`, пользователь ОС/контейнера `sdocsmcp`.
 
