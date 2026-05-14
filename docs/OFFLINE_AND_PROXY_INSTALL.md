@@ -9,7 +9,7 @@
 | **B. Полная изоляция** | Интернета нет даже через прокси; артефакты **заранее выносятся** на площадку (носитель, артефактный реестр, Git без внешних fetch). |
 
 
-Версия в примерах: подставьте свою (см. `pyproject.toml`) вместо `**0.6.0`**.
+Версия в примерах: подставьте свою (см. `pyproject.toml`) вместо `**0.6.1`**.
 
 ---
 
@@ -17,7 +17,7 @@
 
 **Минимум для Docker-эксплуатации (рекомендуется в контуре B):**
 
-- Файл `**sdocs-mcp-ui-0.6.0.tar`** (`docker save` готового образа).
+- Файл `**sdocs-mcp-ui-0.6.1.tar`** (`docker save` готового образа).
 - Ваш `**config.yaml**` (из `config.example.yaml` / `deploy/config.production.example.yaml`) и при необходимости `**deploy/.env**`.
 - Docker (или containerd + nerdctl / podman по политике ИБ).
 
@@ -57,7 +57,7 @@ docker build \
   --build-arg HTTPS_PROXY="$HTTPS_PROXY" \
   --build-arg NO_PROXY="$NO_PROXY" \
   -f deploy/Dockerfile \
-  -t sdocs-mcp-ui:0.6.0 .
+  -t sdocs-mcp-ui:0.6.1 .
 ```
 
 Другой базовый образ (внутренний зеркальный реестр):
@@ -69,13 +69,13 @@ docker build \
   --build-arg NO_PROXY="$NO_PROXY" \
   --build-arg BASE_IMAGE=registry.example.corp/python:3.12-slim \
   -f deploy/Dockerfile \
-  -t sdocs-mcp-ui:0.6.0 .
+  -t sdocs-mcp-ui:0.6.1 .
 ```
 
 Сохраните образ для переноса в более жёсткий контур:
 
 ```bash
-docker save sdocs-mcp-ui:0.6.0 -o sdocs-mcp-ui-0.6.0.tar
+docker save sdocs-mcp-ui:0.6.1 -o sdocs-mcp-ui-0.6.1.tar
 ```
 
 ### 2.1.1. Прокси с логином и паролем (секреты при сборке)
@@ -96,7 +96,7 @@ docker save sdocs-mcp-ui:0.6.0 -o sdocs-mcp-ui-0.6.0.tar
    DOCKER_BUILDKIT=1 docker build \
      --secret id=build_proxy,src=build-proxy.url \
      -f deploy/Dockerfile.buildkit-proxy \
-     -t sdocs-mcp-ui:0.6.0 .
+     -t sdocs-mcp-ui:0.6.1 .
   ```
    Параллельно **daemon** Docker по-прежнему должен уметь тянуть **базовый образ** (`FROM`): при необходимости настройте прокси для daemon (как в §2.1) **или** выполните `docker pull` / `docker load` базы заранее с той же машины, где уже есть образ.
 3. **Docker Compose** (фрагмент, Compose v2 с BuildKit):
@@ -158,10 +158,10 @@ environment:
 
 1. Соберите образ: см. раздел 2 или `[deploy/README.md](../deploy/README.md)`.
 2. Выполните:
-  `docker save sdocs-mcp-ui:0.6.0 -o sdocs-mcp-ui-0.6.0.tar`
+  `docker save sdocs-mcp-ui:0.6.1 -o sdocs-mcp-ui-0.6.1.tar`
 3. Перенесите `**tar`**, конфиги и `.env` на изолированную площадку.
 4. На целевой машине:
-  `docker load -i sdocs-mcp-ui-0.6.0.tar`
+  `docker load -i sdocs-mcp-ui-0.6.1.tar`
 5. Запуск: как в `[deploy/README.md](../deploy/README.md)` (`docker run` или `docker compose -f deploy/docker-compose.prod.yml`).
 
 Интернет и прокси на площадке **не нужны**.

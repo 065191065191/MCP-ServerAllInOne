@@ -55,7 +55,7 @@ _INVOKE_ALLOWLIST: dict[str, dict[str, Any] | None] = {
 
 UI_BASE = normalize_ui_base_path()
 
-app = FastAPI(title="SDocsMCP UI", version="0.6.0")
+app = FastAPI(title="SDocsMCP UI", version="0.6.1")
 web_router = APIRouter()
 
 _trusted_hosts_raw = (os.environ.get("SDOCS_MCP_UI_TRUSTED_HOSTS") or "").strip()

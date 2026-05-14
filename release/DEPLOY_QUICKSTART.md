@@ -9,7 +9,7 @@ docs/                               ← обзор продукта, офлай�
 src/sdocs_mcp/                      ← исходники Python-пакета (для пересборки образа)
 Dockerfile                          ← shortcut: то же, что deploy/Dockerfile
 docker-compose.yml                  ← демо-стенд (Postgres/Redis/Kafka/OpenSearch)
-pyproject.toml                      ← дистрибутив sdocs-mcp 0.6.0
+pyproject.toml                      ← дистрибутив sdocs-mcp 0.6.1
 README.md, CHANGELOG.md
 ```
 
@@ -18,14 +18,14 @@ README.md, CHANGELOG.md
 На машине-сборщике (с интернетом или с wheelhouse, см. `docs/OFFLINE_AND_PROXY_INSTALL.md`):
 
 ```bash
-docker build -f deploy/Dockerfile -t sdocs-mcp-ui:0.6.0 .
-docker save sdocs-mcp-ui:0.6.0 -o sdocs-mcp-ui-0.6.0.tar
+docker build -f deploy/Dockerfile -t sdocs-mcp-ui:0.6.1 .
+docker save sdocs-mcp-ui:0.6.1 -o sdocs-mcp-ui-0.6.1.tar
 ```
 
 На целевой машине:
 
 ```bash
-docker load -i sdocs-mcp-ui-0.6.0.tar
+docker load -i sdocs-mcp-ui-0.6.1.tar
 ```
 
 ## 2. Конфигурация

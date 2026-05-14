@@ -5,25 +5,22 @@
 
 ## [Unreleased]
 
+## [0.6.1] — 2026-05-13
+
+### Исправлено
+
+- **`src/sdocs_mcp/server.py`**: отключено чтение dotenv-файла **`.env`** для настроек **FastMCP** (pydantic-settings), чтобы **`SDOCS_MCP_EMBED_MCP=true`** не приводил к **`PermissionError`** при недоступном `.env` в рабочем каталоге (Docker/OpenShift).
+
 ### Изменено
 
-- **`src/sdocs_mcp/server.py`**: после импорта FastMCP отключается чтение dotenv-файла **`.env`** в настройках MCP (pydantic-settings), чтобы встроенный MCP (`SDOCS_MCP_EMBED_MCP=true`) не падал на `PermissionError` в средах с запретом доступа к `.env` в рабочем каталоге.
-- **`config.example.yaml`**: переписан как минимальный шаблон для копирования (5 модулей + mail), с комментариями «зачем» по каждому полю; полный референс остался в **`deploy/config.production.example.yaml`** и **`docs/CAPABILITIES.md`**.
-- **`Dockerfile`**, **`deploy/Dockerfile`**: в общем `RUN` после `pip install` создаётся пустой **`/app/.env`** (`chmod 644`, владелец через `chown -R`), чтобы при отсутствии патча в старых сборках снизить риск `PermissionError` на `stat(.env)`.
-- **`deploy/env.production.example`**: добавлены переменные почты **`SDOCS_MCP_MAIL_*`**, расширены пояснения к **`SDOCS_MCP_EMBED_MCP`**, **`SDOCS_MCP_STATELESS_HTTP`**, безопасности и аудиту.
-- Проект переименован в **SDocsMCP**: пакет Python `sdocs_mcp`, дистрибутив и CLI `sdocs-mcp` / `sdocs-mcp-ui`, переменные окружения с префиксом **`SDOCS_MCP_`**, systemd/OpenShift-манифесты `sdocs-mcp*`, пользователь ОС/контейнера `sdocsmcp`.
+- **`Dockerfile`**, **`deploy/Dockerfile`**: в образ добавляется пустой читаемый **`/app/.env`**, чтобы снизить риск ошибок `stat` для старых путей загрузки настроек.
+- Версия пакета, метаданные UI и теги образов по умолчанию — **0.6.1** (`pyproject.toml`, `deploy/*`, `README.md`, документация с примерами сборки).
 
-### Добавлено
+### Документация и примеры
 
-- **`docs/OFFLINE_AND_PROXY_INSTALL.md`**: сборка и установка в закрытом контуре, через корпоративный HTTP(S)-прокси, перенос `docker save` / wheelhouse; **`NO_PROXY`** для бэкендов; отдельно — доступ к данным через шлюз в `config.yaml`.
-- **`deploy/Dockerfile.buildkit-proxy`**: пример сборки с **прокси Basic URL** через BuildKit `--secret` (без пароля в слоях образа); §2.1.1 в офлайн-доке; **`build-proxy.url`** в `.gitignore`.
-- **`README.md`**: оглавление, блок «слайд» (`PRODUCT_OVERVIEW` + executive one-pager + Canvas), таблица документации, прокси/секреты при `docker build`, упорядоченная структура.
-- **`docs/EXECUTIVE_ONEPAGER.html`**: автономная визуальная витрина для совета / ТОП (браузер, без внешних картинок; SVG и сценарий на странице).
-- **`docs/EXECUTIVE_ONEPAGER.md`**: текстовый сценарий показа, тайминг и структура того же one-pager.
-
-### Удалено
-
-- **`docs/PRODUCT_OVERVIEW.html`**, **`docs/PRODUCT_OVERVIEW_SPEAKER_NOTES.html`**: дублировали материал; витрина и сценарий сведены в **`EXECUTIVE_ONEPAGER.*`**.
+- **`config.example.yaml`**: минимальный шаблон с mail и комментариями «зачем».
+- **`deploy/env.production.example`**: переменные почты **`SDOCS_MCP_MAIL_*`**, пояснения **`SDOCS_MCP_EMBED_MCP`**, **`SDOCS_MCP_STATELESS_HTTP`**, безопасность и аудит.
+- **`release/DEPLOY_QUICKSTART.md`**: краткая инструкция для переноса в закрытый контур.
 
 ## [0.6.0] — 2026-05-12
 

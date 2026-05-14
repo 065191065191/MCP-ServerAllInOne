@@ -10,6 +10,7 @@ dist/
 build/
 # Архивы релиза (тяжёлые); сам каталог release/ и README в репозитории есть
 release/*.tar.gz
+release/*.zip
 .bundles/
 .pytest_cache/
 .ruff_cache/
