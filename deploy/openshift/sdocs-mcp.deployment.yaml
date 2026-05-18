@@ -31,7 +31,7 @@ spec:
         runAsNonRoot: true
       containers:
         - name: sdocs-mcp
-          image: sdocs-mcp-ui:0.6.3
+          image: sdocs-mcp-ui:0.6.4
           imagePullPolicy: IfNotPresent
           command: ["sdocs-mcp"]
           ports:

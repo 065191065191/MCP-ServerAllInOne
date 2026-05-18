@@ -182,7 +182,7 @@ _DASHBOARD_HTML_RAW = """<!DOCTYPE html>
       <div class="metrics-container">
         <div class="metric-row">
           <div class="metric-item"><div class="metric-number" id="mcpCount">—</div><div class="metric-label">MCP в норме</div><div class="metric-note" id="mcpCountNote">из включённых в конфиге</div></div>
-          <div class="metric-item"><div class="metric-number positive" id="totalCalls">—</div><div class="metric-label">Обращений к API UI</div><div class="metric-note" id="periodNote">sdocs_mcp_ui_requests_total</div></div>
+          <div class="metric-item"><div class="metric-number positive" id="totalCalls">—</div><div class="metric-label">Обращений к MCP</div><div class="metric-note" id="periodNote">sdocs_mcp_mcp_http_requests_total</div></div>
           <div class="metric-item"><div class="metric-number positive" id="avgUptime">—</div><div class="metric-label">Доля успешных проверок</div><div class="metric-note">enabled-модули, health</div></div>
         </div>
         <div class="metric-row">
@@ -277,7 +277,7 @@ _DASHBOARD_HTML_RAW = """<!DOCTYPE html>
     baseSavedHoursMonth = modelSavedHoursMonth(payload);
     $('mcpCount').textContent = String(s.mcp_healthy_count ?? '—');
     $('mcpCountNote').textContent = 'из ' + (s.mcp_enabled_count ?? '—') + ' включённых';
-    const req = s.ui_requests_total ?? 0;
+    const req = s.mcp_requests_total ?? 0;
     $('totalCalls').textContent = req >= 1000 ? (req / 1000).toFixed(1) + 'k' : String(req);
     const up = s.uptime_score_pct;
     $('avgUptime').textContent = typeof up === 'number' ? up.toFixed(1) + '%' : '—';
@@ -326,7 +326,7 @@ _DASHBOARD_HTML_RAW = """<!DOCTYPE html>
         '<div class="toggle-switch ' + (st !== 'offline' ? 'active' : '') + '"><div class="knob"></div></div></div></div>' +
         '<div class="server-metrics"><span>latency ' + lat + '</span><span>' + (srv.enabled ? 'включён' : 'выкл. в конфиге') + '</span></div>' +
         '<div class="server-footer"><span>' + (srv.detail || '').slice(0, 120) + '</span><span>' +
-        (st === 'online' ? 'OK' : st === 'degraded' ? 'проверка не прошла' : 'не активен') + '</span></div>' + ((srv.type === 'mail' && srv.enabled) ? '<button type="button" class="mail-test-btn" data-mail-test="1">✉ Тест (себе)</button>' : '');
+        (st === 'online' ? 'OK' : st === 'degraded' ? 'проверка не прошла' : 'не активен') + '</span></div>' + ((srv.id === 'mail' && srv.enabled) ? '<button type="button" class="mail-test-btn" data-mail-test="1">✉ Тест (себе)</button>' : '');
       container.appendChild(div);
     });
     document.querySelectorAll('.toggle-mcp').forEach((el) => {

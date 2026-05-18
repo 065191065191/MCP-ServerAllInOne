@@ -27,6 +27,7 @@ from sdocs_mcp.config import AppConfig, load_config
 from sdocs_mcp.executive_dashboard_html import DASHBOARD_HTML
 from sdocs_mcp.kafka_tools import kafka_broker_client_config
 from sdocs_mcp.http_access_log import install_access_logging
+from sdocs_mcp.mcp_telemetry import mcp_http_requests_total, wrap_mcp_http_app
 from sdocs_mcp.mail_tools import _imap_user, mail_imap_verify, mail_smtp_send
 from sdocs_mcp.mtls import resolve_mcp_mtls_uvicorn_kwargs
 from sdocs_mcp.opensearch_tools import connect_opensearch
@@ -56,7 +57,7 @@ _INVOKE_ALLOWLIST: dict[str, dict[str, Any] | None] = {
 
 UI_BASE = normalize_ui_base_path()
 
-app = FastAPI(title="SDocsMCP UI", version="0.6.3")
+app = FastAPI(title="SDocsMCP UI", version="0.6.4")
 web_router = APIRouter()
 
 install_access_logging(app, load_config().logging)
@@ -345,12 +346,13 @@ def _build_dashboard_stats(cfg: AppConfig) -> dict[str, Any]:
         "collected_at": int(time.time()),
         "data_sources_note": (
             "Факт: health и latency — прямые проверки UI к модулям из конфига; "
-            "обращения — счётчик sdocs_mcp_ui_requests_total (защищённые /api/*). "
+            "обращения — HTTP к MCP (Streamable HTTP / SSE), не /api/* UI. "
             "Gateway /mcp/*, Nacos, Jira в этой сборке не агрегируются — подключите в проде по описанию заказчика."
         ),
         "summary": {
             "mcp_enabled_count": enabled_cnt,
             "mcp_healthy_count": healthy_cnt,
+            "mcp_requests_total": mcp_http_requests_total(),
             "ui_requests_total": int(snap.get("requests_total", 0.0)),
             "ui_events_last_minute": limiter["events_last_minute"],
             "ui_active_ips": limiter["active_ips"],
@@ -651,6 +653,8 @@ async def api_auth_config() -> JSONResponse:
         {
             "ui_bearer_enabled": bool(_API_TOKEN),
             "metrics_auth_required": _metrics_auth_required(),
+            "ui_invoke_enabled": _ENABLE_INVOKE,
+            "ui_seed_enabled": _ENABLE_SEED,
         }
     )
 
@@ -762,6 +766,9 @@ async def prometheus_metrics(req: Request) -> PlainTextResponse:
             "# HELP sdocs_mcp_ui_request_latency_seconds_count API handler count for latency.",
             "# TYPE sdocs_mcp_ui_request_latency_seconds_count counter",
             f"sdocs_mcp_ui_request_latency_seconds_count {int(snap.get('request_latency_count', 0.0))}",
+            "# HELP sdocs_mcp_mcp_http_requests_total HTTP requests to MCP endpoint (not UI /api/*).",
+            "# TYPE sdocs_mcp_mcp_http_requests_total counter",
+            f"sdocs_mcp_mcp_http_requests_total {mcp_http_requests_total()}",
             "# HELP sdocs_mcp_ui_rate_limiter_events_last_minute Requests observed in in-memory limiter window.",
             "# TYPE sdocs_mcp_ui_rate_limiter_events_last_minute gauge",
             f"sdocs_mcp_ui_rate_limiter_events_last_minute {limiter['events_last_minute']}",
@@ -1033,7 +1040,9 @@ def _embed_sdocs_mcp_if_enabled() -> None:
             path_prefix=mcp_path,
         )
     mcp = build_mcp(cfg, streamable_http_path="/")
-    app.mount(mcp_path, mcp.streamable_http_app())
+    mcp_app = wrap_mcp_http_app(mcp.streamable_http_app())
+    install_access_logging(mcp_app, cfg.logging)
+    app.mount(mcp_path, mcp_app)
     logging.getLogger("sdocs_mcp.ui").info(
         "Embedded sdocs-mcp: Streamable HTTP on same port as UI at path %s "
         "(set SDOCS_MCP_EMBED_MCP=false to run sdocs-mcp on a separate port).",
@@ -1305,9 +1314,10 @@ _OPS_HTML_RAW = """<!DOCTYPE html>
       </div>
       <pre id="tools">—</pre>
       <h2 class="section-title" style="margin-top:1.25rem;">Вызовы из UI (allowlist)</h2>
-      <p class="section-note">Кнопки дергают <code>FastMCP.call_tool</code> на сервере. <strong>Seed</strong> пишет тестовые данные — используйте осознанно.</p>
+      <p class="section-note">Кнопки дергают <code>FastMCP.call_tool</code> на сервере (нужен <code>SDOCS_MCP_UI_ENABLE_INVOKE=true</code>). <strong>Seed</strong> — <code>SDOCS_MCP_UI_ENABLE_SEED=true</code>.</p>
       <div class="btn-row">
         <button type="button" id="btn-seed">Seed (Postgres / Redis / OpenSearch / Kafka)</button>
+        <button type="button" id="btn-mail-test">✉ Тест почты (себе)</button>
       </div>
       <div id="invoke-buttons"></div>
       <p class="muted" id="invoke-label"><strong>Ответ</strong></p>
@@ -1432,16 +1442,36 @@ _OPS_HTML_RAW = """<!DOCTYPE html>
       $('tools').textContent = JSON.stringify(t, null, 2);
     }
     async function invoke(name) {
-      $('invoke-out').textContent = '…';
-      const r = await jpost('/api/mcp/invoke', { tool: name });
-      $('invoke-out').textContent = JSON.stringify(r, null, 2);
+      const out = $('invoke-out');
+      out.textContent = '…';
+      try {
+        const r = await jpost('/api/mcp/invoke', { tool: name });
+        out.textContent = JSON.stringify(r, null, 2);
+      } catch (e) {
+        out.textContent = 'Ошибка: ' + e;
+      }
     }
     async function seed() {
-      $('invoke-out').textContent = 'Seeding…';
-      const r = await jpost('/api/seed', {});
-      $('invoke-out').textContent = JSON.stringify(r, null, 2);
-      await refreshStatus();
-      await refreshMetricsPreview().catch(() => {});
+      const out = $('invoke-out');
+      out.textContent = 'Seeding…';
+      try {
+        const r = await jpost('/api/seed', {});
+        out.textContent = JSON.stringify(r, null, 2);
+        await refreshStatus();
+        await refreshMetricsPreview().catch(() => {});
+      } catch (e) {
+        out.textContent = 'Ошибка: ' + e;
+      }
+    }
+    async function mailTest() {
+      const out = $('invoke-out');
+      out.textContent = 'Отправка…';
+      try {
+        const r = await jpost('/api/mail/test-send', {});
+        out.textContent = JSON.stringify(r, null, 2);
+      } catch (e) {
+        out.textContent = 'Ошибка: ' + e;
+      }
     }
     const allowed = [
       'sdocs_mcp_status','redis_ping','redis_info','redis_dbsize','postgres_connections_overview','postgres_database_sizes',
@@ -1468,11 +1498,13 @@ _OPS_HTML_RAW = """<!DOCTYPE html>
       $('metrics-token').onchange = () => localStorage.setItem('sdocs_mcp_metrics_token', $('metrics-token').value || '');
       try {
         const ac = await fetch(__UI_BASE + '/api/auth-config').then((r) => r.json());
-        if (ac.ui_bearer_enabled) {
-          $('auth-hint').textContent = 'Сейчас: для /api/* нужен Bearer (SDOCS_MCP_UI_TOKEN).';
-        } else {
-          $('auth-hint').textContent = 'Сейчас: /api/* без Bearer (токен UI на сервере не задан).';
+        let hint = ac.ui_bearer_enabled
+          ? 'Сейчас: для /api/* нужен Bearer (SDOCS_MCP_UI_TOKEN).'
+          : 'Сейчас: /api/* без Bearer (токен UI на сервере не задан).';
+        if (!ac.ui_invoke_enabled) {
+          hint += ' Вызов tools из UI выключен (SDOCS_MCP_UI_ENABLE_INVOKE=false).';
         }
+        $('auth-hint').textContent = hint;
       } catch (e) {
         $('auth-hint').textContent = '';
       }
@@ -1490,7 +1522,8 @@ _OPS_HTML_RAW = """<!DOCTYPE html>
         err.textContent = String(e);
       });
       $('btn-tools').onclick = () => loadTools().catch(e => alert(e));
-      $('btn-seed').onclick = () => seed().catch(e => alert(e));
+      $('btn-seed').onclick = () => seed().catch(e => { $('invoke-out').textContent = 'Ошибка: ' + e; });
+      $('btn-mail-test').onclick = () => mailTest().catch(e => { $('invoke-out').textContent = 'Ошибка: ' + e; });
       $('btn-metrics').onclick = () => refreshMetricsPreview().catch(e => { $('metrics-preview').textContent = String(e); });
       await refreshStatus().catch(e => {
         const err = $('status-error');
