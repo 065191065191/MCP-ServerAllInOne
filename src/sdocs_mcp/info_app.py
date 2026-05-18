@@ -8,8 +8,11 @@ import socket
 import threading
 import time
 from collections import defaultdict, deque
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
+
+from mcp.server.fastmcp import FastMCP
 
 import httpx
 import psycopg
@@ -57,7 +60,20 @@ _INVOKE_ALLOWLIST: dict[str, dict[str, Any] | None] = {
 
 UI_BASE = normalize_ui_base_path()
 
-app = FastAPI(title="SDocsMCP UI", version="0.6.4")
+# Встроенный MCP: lifespan sub-app Starlette при mount() не вызывается — держим session_manager здесь.
+_embedded_mcp: FastMCP | None = None
+
+
+@asynccontextmanager
+async def _app_lifespan(_application: FastAPI):
+    if _embedded_mcp is not None:
+        async with _embedded_mcp.session_manager.run():
+            yield
+    else:
+        yield
+
+
+app = FastAPI(title="SDocsMCP UI", version="0.6.5", lifespan=_app_lifespan)
 web_router = APIRouter()
 
 install_access_logging(app, load_config().logging)
@@ -1028,6 +1044,7 @@ app.include_router(web_router, prefix=UI_BASE)
 
 def _embed_sdocs_mcp_if_enabled() -> None:
     """Один порт с UI: Streamable HTTP MCP на пути {base}/mcp (SDOCS_MCP_EMBED_MCP=true)."""
+    global _embedded_mcp
     if (os.environ.get("SDOCS_MCP_EMBED_MCP") or "").strip().lower() not in ("1", "true", "yes"):
         return
     cfg = load_config()
@@ -1042,11 +1059,14 @@ def _embed_sdocs_mcp_if_enabled() -> None:
     mcp = build_mcp(cfg, streamable_http_path="/")
     mcp_app = wrap_mcp_http_app(mcp.streamable_http_app())
     install_access_logging(mcp_app, cfg.logging)
-    app.mount(mcp_path, mcp_app)
+    _embedded_mcp = mcp
+    # Mount с завершающим / — иначе Starlette даёт 307 /sdocs/mcp → /sdocs/mcp/
+    mount_path = mcp_path if mcp_path.endswith("/") else f"{mcp_path}/"
+    app.mount(mount_path, mcp_app)
     logging.getLogger("sdocs_mcp.ui").info(
         "Embedded sdocs-mcp: Streamable HTTP on same port as UI at path %s "
         "(set SDOCS_MCP_EMBED_MCP=false to run sdocs-mcp on a separate port).",
-        mcp_path,
+        mount_path,
     )
 
 

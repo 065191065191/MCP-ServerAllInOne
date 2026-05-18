@@ -5,6 +5,12 @@
 
 ## [Unreleased]
 
+## [0.6.5] — 2026-05-15
+
+### Исправлено
+
+- **Встроенный MCP (`SDOCS_MCP_EMBED_MCP`)**: при `app.mount(…/mcp)` запускается `session_manager.run()` в lifespan FastAPI — устранён `500 RuntimeError: Task group is not initialized`. Mount с завершающим `/` (`/sdocs/mcp/`).
+
 ## [0.6.4] — 2026-05-15
 
 ### Исправлено
