@@ -5,6 +5,19 @@
 
 ## [Unreleased]
 
+## [0.6.6] — 2026-05-15
+
+### Исправлено
+
+- **Prometheus Cron:** первый тик сразу после старта; пропуски не затирают `last_error`; статусы `enabled` / `active` / `running`; предупреждение при `SDOCS_MCP_UI_WORKERS>1`; отключение через `SDOCS_MCP_PROMETHEUS_CRON=false`.
+
+### Добавлено
+
+- **Prometheus MCP:** tool `prometheus_mcp_guide`, расширенные instructions и docstrings (отличие от `/metrics` SDocsMCP).
+- **Топик Kafka по умолчанию:** `modules.prometheus.kafka_metrics_topic` (`sdocs.prometheus.metrics`) для `prometheus_export_instant_to_kafka`.
+- **Фоновый Cron:** опрос Prometheus → Kafka (`metrics_cron`, по умолчанию 1 мин, `up`); API `/api/prometheus-metrics-cron`; вкладка **Cron** в консоли `/ops`.
+- **UI консоль:** компактная сетка «Доступ» / «Актуальные данные»; золотая тема подстраниц.
+
 ## [0.6.5] — 2026-05-15
 
 ### Исправлено

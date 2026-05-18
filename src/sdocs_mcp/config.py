@@ -290,6 +290,14 @@ class RedisModuleConfig(ModuleClientMtlsMixin):
         return self
 
 
+class PrometheusMetricsCronConfig(BaseModel):
+    """Фоновый instant query → Kafka (вкладка Cron в UI)."""
+
+    enabled: bool = True
+    interval_seconds: int = 60
+    query: str = "up"
+
+
 class PrometheusModuleConfig(ModuleClientMtlsMixin):
     enabled: bool = False
     base_url: str = "http://localhost:9090"
@@ -308,7 +316,8 @@ class PrometheusModuleConfig(ModuleClientMtlsMixin):
     max_matrix_series: int = 100
     max_points_per_series: int = 5000
     max_series_matches: int = 500
-    kafka_metrics_topic: str | None = None
+    kafka_metrics_topic: str = "sdocs.prometheus.metrics"
+    metrics_cron: PrometheusMetricsCronConfig = Field(default_factory=PrometheusMetricsCronConfig)
 
 
 class MailModuleConfig(BaseModel):

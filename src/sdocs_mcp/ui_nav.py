@@ -104,121 +104,151 @@ def inject_top_nav(html_fragment: str, current: NavPage) -> str:
 # Те же токены и поведение, что у главного дашборда (executive_dashboard_html), плюс алиасы для старых имён переменных в /ops.
 SUBPAGE_SKIN_STYLES = """
     nav.sdocs-mcp-topnav {
-      border-color: var(--border-light);
-      background: var(--bg-card-light);
+      border-color: var(--border);
+      background: var(--card-bg);
     }
-    nav.sdocs-mcp-topnav a:not(.is-active) { color: var(--accent-green); }
+    nav.sdocs-mcp-topnav a:not(.is-active) { color: var(--accent); }
     nav.sdocs-mcp-topnav a.is-active { color: var(--text-primary); }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     :root {
-      --bg-primary: #020304;
-      --bg-card: #080b10;
-      --bg-card-light: #0d0f16;
-      --border-color: #171b23;
-      --border-light: #1a1e28;
-      --text-primary: #eef3ff;
-      --text-secondary: #8d99ab;
-      --text-muted: #5a6675;
-      --accent-green: #10b981;
-      --accent-gold: #f0b90b;
-      --accent-green-glow: #10b98130;
-      --bg: var(--bg-primary);
-      --surface: var(--bg-card);
-      --surface2: var(--bg-card-light);
+      --bg-gradient: linear-gradient(165deg, #0b0f14 0%, #121826 50%, #0d1219 100%);
+      --accent: #e8c07d;
+      --accent-dim: rgba(232, 192, 125, 0.22);
+      --accent-gradient: linear-gradient(rgba(232, 192, 125, 0.14), #121826 92%);
+      --text-primary: #f4f1ea;
+      --text-muted: rgba(244, 241, 234, 0.72);
+      --card-bg: rgba(18, 24, 38, 0.65);
+      --border: rgba(232, 192, 125, 0.22);
+      --success: rgba(100, 200, 100, 0.8);
+      --danger: rgba(200, 100, 100, 0.8);
+      --warning: rgba(232, 192, 125, 0.6);
+      --bg-primary: #0b0f14;
+      --bg-card: rgba(18, 24, 38, 0.65);
+      --bg-card-light: rgba(18, 24, 38, 0.8);
+      --border-light: var(--border);
+      --text-secondary: var(--text-muted);
+      --accent-green: var(--accent);
+      --accent-gold: var(--accent);
+      --bg: transparent;
+      --surface: var(--card-bg);
+      --surface2: rgba(18, 24, 38, 0.8);
       --text: var(--text-primary);
-      --muted: var(--text-secondary);
-      --border: var(--border-color);
-      --accent: var(--accent-green);
-      --accent-soft: rgba(16, 185, 129, 0.14);
-      --ok: #10b981;
-      --ok-bg: rgba(16, 185, 129, 0.12);
-      --bad: #f97316;
-      --bad-bg: rgba(249, 115, 22, 0.12);
-      --skip: #6b7280;
-      --skip-bg: rgba(107, 114, 128, 0.15);
-      --radius: 20px;
-      --radius-sm: 12px;
+      --muted: var(--text-muted);
+      --accent-soft: var(--accent-dim);
+      --ok: var(--success);
+      --ok-bg: rgba(100, 200, 100, 0.15);
+      --bad: var(--danger);
+      --bad-bg: rgba(200, 100, 100, 0.15);
+      --skip: var(--text-muted);
+      --skip-bg: rgba(244, 241, 234, 0.08);
+      --radius: 0.8rem;
+      --radius-sm: 0.5rem;
       font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    }
-    body.light {
-      --bg-primary: #f5f7fc;
-      --bg-card: #ffffff;
-      --bg-card-light: #f8f9fe;
-      --border-color: #e2e8f0;
-      --border-light: #e2edf2;
-      --text-primary: #1a202c;
-      --text-secondary: #4a5568;
-      --text-muted: #718096;
-      --accent-green: #059669;
-      --accent-gold: #b45309;
-      --accent-green-glow: #05966920;
-      --bg: var(--bg-primary);
-      --surface: var(--bg-card);
-      --surface2: var(--bg-card-light);
-      --text: var(--text-primary);
-      --muted: var(--text-secondary);
-      --border: var(--border-color);
-      --accent: var(--accent-green);
-      --accent-soft: rgba(5, 150, 105, 0.12);
-      --ok-bg: rgba(5, 150, 105, 0.12);
-      --bad-bg: rgba(234, 88, 12, 0.12);
-      --skip-bg: rgba(100, 116, 139, 0.12);
     }
     body {
       margin: 0;
       min-height: 100vh;
-      background: var(--bg-primary);
+      background: var(--bg-gradient);
       color: var(--text-primary);
       line-height: 1.55;
-      padding: 32px 40px;
+      padding: clamp(1rem, 2vw, 2rem);
       font-family: inherit;
       transition: background 0.2s, color 0.2s;
     }
-    @media (max-width: 640px) {
-      body { padding: 20px 16px; }
+    h1, h2 {
+      color: var(--accent);
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--accent-dim);
+    }
+    h3 { color: var(--text-primary); }
+    .card, .panel {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      backdrop-filter: blur(10px);
+      transition: all 0.2s ease;
+    }
+    .card:hover, .panel:hover {
+      border-color: var(--accent);
+      background: rgba(18, 24, 38, 0.8);
+    }
+    table { border-collapse: collapse; width: 100%; }
+    th {
+      background: rgba(232, 192, 125, 0.08);
+      color: var(--accent);
+      text-transform: uppercase;
+      font-size: 0.72rem;
+    }
+    td, th { border: 1px solid var(--border); padding: 0.65rem 0.85rem; }
+    tr { transition: all 0.2s ease; }
+    tr:hover td { background: rgba(232, 192, 125, 0.1); }
+    .check { color: var(--success); }
+    .cross { color: var(--danger); }
+    .warn { color: var(--warning); }
+    .badge {
+      display: inline-block;
+      padding: 0.25rem 0.6rem;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      transition: all 0.2s ease;
+    }
+    .badge-success, .badge-ok { background: rgba(100,200,100,0.15); color: var(--success); border: 1px solid var(--success); }
+    .badge-warning, .badge-on { background: rgba(232,192,125,0.15); color: var(--accent); border: 1px solid var(--accent); }
+    .badge-danger, .badge-bad { background: rgba(200,100,100,0.15); color: var(--danger); border: 1px solid var(--danger); }
+    .badge-skip, .badge-off { background: rgba(244,241,234,0.08); color: var(--text-muted); border: 1px solid var(--border); }
+    input, textarea, select {
+      background: rgba(18, 24, 38, 0.8);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 0.75rem 1rem;
+      color: var(--text-primary);
+      font-family: inherit;
+    }
+    input:focus, textarea:focus, select:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+    button {
+      background: var(--accent-dim);
+      border: 1px solid var(--accent);
+      border-radius: var(--radius-sm);
+      padding: 0.5rem 1.2rem;
+      color: var(--accent);
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    button:hover {
+      background: var(--accent);
+      color: #121826;
+    }
+    .comparison-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 0.75rem;
+    }
+    @media (max-width: 768px) {
+      .comparison-grid { grid-template-columns: 1fr; }
+      table { font-size: 0.75rem; }
+      th, td { padding: 0.5rem; }
     }
     .dashboard { max-width: 1600px; margin: 0 auto; }
     .subpage-content { max-width: 1120px; }
     .dashboard-footer {
-      margin-top: 40px;
+      margin-top: 2rem;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding-top: 20px;
-      border-top: 0.5px solid var(--border-light);
+      padding-top: 1rem;
+      border-top: 1px solid var(--border);
       font-size: 11px;
       color: var(--text-muted);
       flex-wrap: wrap;
       gap: 12px;
     }
-    .theme-switch {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      background: var(--bg-card-light);
-      padding: 4px 12px;
-      border-radius: 40px;
-      cursor: pointer;
-    }
-    .theme-switch .toggle-track {
-      width: 36px;
-      height: 18px;
-      background: var(--border-light);
-      border-radius: 30px;
-      position: relative;
-      transition: 0.2s;
-    }
-    .theme-switch .toggle-track .toggle-thumb {
-      width: 14px;
-      height: 14px;
-      background: var(--text-primary);
-      border-radius: 14px;
-      position: absolute;
-      top: 2px;
-      left: 2px;
-      transition: 0.2s;
-    }
-    body.light .theme-switch .toggle-track .toggle-thumb { left: 20px; }
     .skip-link {
       position: absolute;
       left: -9999px;

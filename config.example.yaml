@@ -56,6 +56,11 @@ modules:
     base_url: http://prometheus.internal:9090
     basic_auth_username: null            # null — без авторизации
     basic_auth_password: null
+    kafka_metrics_topic: sdocs.prometheus.metrics   # топик по умолчанию для prometheus_export_instant_to_kafka
+    metrics_cron:
+      enabled: true                      # UI «Cron»: опрос Prometheus → Kafka
+      interval_seconds: 60               # 30, 60, … (мин. 15)
+      query: up                          # PromQL для фоновой выгрузки
 
   # ───── Mail (IMAP + SMTP) ───────────────────────────────────────
   # Зачем: чтение ящика и отправка писем. Логин/пароль — в YAML или через *_env.

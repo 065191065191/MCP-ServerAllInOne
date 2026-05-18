@@ -239,24 +239,74 @@ def _register_prometheus(
     prom: PrometheusModuleConfig,
     kafka: KafkaModuleConfig | None,
 ) -> None:
+    default_topic = prom.kafka_metrics_topic
+
+    @mcp.tool()
+    def prometheus_mcp_guide() -> str:
+        """Справка: как вызывать MCP Prometheus (не путать с /metrics SDocsMCP)."""
+        export_tools = (
+            ["prometheus_export_instant_to_kafka"]
+            if kafka and kafka.enabled and kafka.allow_produce
+            else []
+        )
+        return json.dumps(
+            {
+                "what_this_is": (
+                    "HTTP-клиент к вашему Prometheus (modules.prometheus.base_url), "
+                    "не scrape метрик самого SDocsMCP."
+                ),
+                "not_this": (
+                    "GET /metrics на хосте UI/MCP — только внутренние счётчики sdocs_mcp_*; "
+                    "для PromQL используйте tools ниже."
+                ),
+                "query_tools": [
+                    "prometheus_query_instant",
+                    "prometheus_query_range",
+                    "prometheus_targets",
+                    "prometheus_metadata",
+                    "prometheus_series",
+                    "prometheus_labels",
+                    "prometheus_rules",
+                    "prometheus_alerts",
+                ],
+                "kafka_export_tools": export_tools,
+                "default_kafka_topic": default_topic,
+                "kafka_export_topic_arg": (
+                    "topic в prometheus_export_instant_to_kafka опционален — "
+                    f"по умолчанию {default_topic!r}"
+                ),
+                "background_cron": (
+                    "UI Консоль → вкладка Cron: опрос Prometheus → Kafka, "
+                    f"интервал по умолчанию {prom.metrics_cron.interval_seconds}s, "
+                    f"PromQL {prom.metrics_cron.query!r}"
+                ),
+                "example_instant": 'prometheus_query_instant(query="up")',
+                "example_kafka": (
+                    f'prometheus_export_instant_to_kafka(query="up")  # topic → {default_topic!r}'
+                ),
+            },
+            indent=2,
+            ensure_ascii=False,
+        )
+
     @mcp.tool()
     def prometheus_query_instant(query: str, at_time: str | None = None) -> str:
-        """Prometheus instant query (/api/v1/query). Response size capped."""
+        """Instant PromQL к modules.prometheus.base_url (/api/v1/query). Не /metrics SDocsMCP."""
         return prometheus_tools.prometheus_query_instant(prom, query, at_time)
 
     @mcp.tool()
     def prometheus_query_range(query: str, start: str, end: str, step: str) -> str:
-        """Prometheus range query (/api/v1/query_range). Range/step capped."""
+        """Range PromQL (/api/v1/query_range) к удалённому Prometheus."""
         return prometheus_tools.prometheus_query_range(prom, query, start, end, step)
 
     @mcp.tool()
     def prometheus_targets(state: str | None = None) -> str:
-        """Scrape targets (/api/v1/targets)."""
+        """Цели scrape (/api/v1/targets) удалённого Prometheus."""
         return prometheus_tools.prometheus_targets(prom, state)
 
     @mcp.tool()
     def prometheus_metadata(metric: str | None = None) -> str:
-        """Metric metadata (/api/v1/metadata)."""
+        """Метаданные метрик (/api/v1/metadata)."""
         return prometheus_tools.prometheus_metadata(prom, metric)
 
     @mcp.tool()
@@ -265,12 +315,12 @@ def _register_prometheus(
         start: str | None = None,
         end: str | None = None,
     ) -> str:
-        """Series selector (/api/v1/series); match_queries = Prometheus match[] list."""
+        """Серии по match[] (/api/v1/series)."""
         return prometheus_tools.prometheus_series(prom, match_queries, start, end)
 
     @mcp.tool()
     def prometheus_labels() -> str:
-        """Label names (/api/v1/labels)."""
+        """Имена лейблов (/api/v1/labels)."""
         return prometheus_tools.prometheus_labels(prom)
 
     @mcp.tool()
@@ -280,7 +330,7 @@ def _register_prometheus(
 
     @mcp.tool()
     def prometheus_alerts() -> str:
-        """Active alerts (/api/v1/alerts)."""
+        """Активные алерты (/api/v1/alerts)."""
         return prometheus_tools.prometheus_alerts(prom)
 
     if kafka and kafka.enabled and kafka.allow_produce:
@@ -290,7 +340,12 @@ def _register_prometheus(
             topic: str | None = None,
             message_key: str | None = None,
         ) -> str:
-            """Run instant query and publish JSON envelope to Kafka (needs allow_produce + allowlisted topic)."""
+            f"""Instant query → JSON в Kafka.
+
+            Запрос к modules.prometheus.base_url, не к /metrics SDocsMCP.
+            topic: опционально; иначе kafka_metrics_topic (сейчас {default_topic!r}).
+            Нужны kafka.allow_produce и топик в topic_allowlist.
+            """
             return prometheus_tools.prometheus_export_instant_to_kafka(
                 prom,
                 kafka,
@@ -449,6 +504,15 @@ def build_mcp(
             " OpenSearch RAG: shared agent memory — call opensearch_rag_policy first; "
             "store durable facts only via opensearch_rag_store into allowlisted indices; "
             "retrieve context with opensearch_rag_search (not unbounded)."
+        )
+    if app.modules.prometheus.enabled:
+        prom = app.modules.prometheus
+        _instr += (
+            " Prometheus (remote server at modules.prometheus.base_url, NOT this MCP host /metrics): "
+            "call prometheus_mcp_guide first; use prometheus_query_instant / prometheus_query_range "
+            "for PromQL; prometheus_export_instant_to_kafka publishes JSON to Kafka "
+            f"(default topic {prom.kafka_metrics_topic!r}, allowlisted). "
+            "SDocsMCP /metrics and UI /metrics are only this app's own counters."
         )
     _fm_kw: dict[str, Any] = {
         "name": "sdocs-mcp",

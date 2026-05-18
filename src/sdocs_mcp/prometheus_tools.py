@@ -10,6 +10,19 @@ import httpx
 from sdocs_mcp.backend_tls import prometheus_httpx_verify_and_cert
 from sdocs_mcp.config import KafkaModuleConfig, PrometheusModuleConfig
 
+DEFAULT_KAFKA_METRICS_TOPIC = "sdocs.prometheus.metrics"
+
+
+def resolve_kafka_metrics_topic(cfg: PrometheusModuleConfig, topic: str | None) -> str:
+    """Топик Kafka для экспорта метрик: аргумент tool → kafka_metrics_topic в конфиге."""
+    t = (topic or "").strip() or (cfg.kafka_metrics_topic or "").strip()
+    if not t:
+        raise ValueError(
+            "kafka topic: укажите topic в tool или modules.prometheus.kafka_metrics_topic "
+            f"(по умолчанию {DEFAULT_KAFKA_METRICS_TOPIC!r})"
+        )
+    return t
+
 
 def _read_optional_token(cfg: PrometheusModuleConfig) -> str | None:
     if cfg.bearer_token:
@@ -199,9 +212,7 @@ def prometheus_export_instant_to_kafka(
 ) -> str:
     if not kafka.allow_produce:
         raise PermissionError("kafka allow_produce must be true to export metrics")
-    target_topic = topic or prom.kafka_metrics_topic
-    if not target_topic:
-        raise ValueError("topic required (or set prometheus.kafka_metrics_topic)")
+    target_topic = resolve_kafka_metrics_topic(prom, topic)
     if target_topic not in kafka.topic_allowlist:
         raise PermissionError(f"topic {target_topic!r} not in kafka.topic_allowlist")
 

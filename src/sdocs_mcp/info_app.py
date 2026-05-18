@@ -66,14 +66,23 @@ _embedded_mcp: FastMCP | None = None
 
 @asynccontextmanager
 async def _app_lifespan(_application: FastAPI):
-    if _embedded_mcp is not None:
-        async with _embedded_mcp.session_manager.run():
+    from sdocs_mcp.prometheus_cron import (
+        start_prometheus_metrics_cron,
+        stop_prometheus_metrics_cron,
+    )
+
+    start_prometheus_metrics_cron()
+    try:
+        if _embedded_mcp is not None:
+            async with _embedded_mcp.session_manager.run():
+                yield
+        else:
             yield
-    else:
-        yield
+    finally:
+        stop_prometheus_metrics_cron()
 
 
-app = FastAPI(title="SDocsMCP UI", version="0.6.5", lifespan=_app_lifespan)
+app = FastAPI(title="SDocsMCP UI", version="0.6.6", lifespan=_app_lifespan)
 web_router = APIRouter()
 
 install_access_logging(app, load_config().logging)
@@ -996,6 +1005,36 @@ async def status_page() -> str:
     return _STATUS_HTML
 
 
+@web_router.get("/api/prometheus-metrics-cron")
+async def api_prometheus_metrics_cron_get(req: Request) -> dict[str, Any]:
+    """Статус фонового Prometheus→Kafka (вкладка Cron)."""
+    from sdocs_mcp.prometheus_cron import get_cron_status
+
+    _secure_api(req, "prometheus_metrics_cron")
+    return get_cron_status()
+
+
+@web_router.post("/api/prometheus-metrics-cron")
+async def api_prometheus_metrics_cron_post(req: Request) -> dict[str, Any]:
+    """Обновить интервал/запрос/включение cron (в памяти процесса)."""
+    from sdocs_mcp.prometheus_cron import apply_cron_runtime
+
+    _secure_api(req, "prometheus_metrics_cron")
+    body = await req.json()
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="expected JSON object")
+    try:
+        return apply_cron_runtime(
+            enabled=body.get("enabled") if "enabled" in body else None,
+            interval_seconds=body.get("interval_seconds")
+            if "interval_seconds" in body
+            else None,
+            query=body.get("query") if "query" in body else None,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
 @web_router.get("/api/postgres-allowlist")
 async def api_postgres_allowlist(req: Request) -> JSONResponse:
     """Список query_id из modules.postgres.allowlisted_queries (без текста SQL) — для обзора и внешних вызовов по id."""
@@ -1089,8 +1128,26 @@ _OPS_HTML_RAW = """<!DOCTYPE html>
       margin-bottom: 1rem;
       border-bottom: 1px solid var(--border);
     }
-    .page-head h1 { margin: 0 0 0.4rem; font-size: 1.35rem; font-weight: 600; letter-spacing: -0.02em; }
-    .lede { margin: 0 0 0.75rem; color: var(--muted); font-size: 0.95rem; max-width: 52rem; }
+    .page-head h1 { margin: 0 0 0.35rem; font-size: 1.1rem; font-weight: 600; letter-spacing: 0.04em; border: none; }
+    .lede { margin: 0; color: var(--muted); font-size: 0.82rem; max-width: 52rem; }
+    .ops-meta-grid { margin-bottom: 0.75rem; }
+    .compact-panel { padding: 0.75rem 0.9rem; margin: 0; }
+    .compact-panel h3 {
+      margin: 0 0 0.45rem;
+      font-size: 0.7rem;
+      font-weight: 650;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--accent);
+      border: none;
+    }
+    .compact-panel .field-group { margin: 0.35rem 0 0; }
+    .compact-panel .field-label { margin-bottom: 0.2rem; font-size: 0.68rem; }
+    .compact-panel .muted { font-size: 0.78rem; line-height: 1.35; }
+    .cron-form { display: grid; gap: 0.65rem; max-width: 36rem; }
+    .cron-form label { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    .cron-row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+    #cron-status-box { font-size: 0.82rem; line-height: 1.45; }
     .top-links { font-size: 0.9rem; display: flex; flex-wrap: wrap; gap: 0.35rem 1rem; align-items: baseline; }
     .top-links a { color: var(--accent); text-decoration: none; font-weight: 500; border-bottom: 1px solid transparent; }
     .top-links a:hover { border-bottom-color: var(--accent); }
@@ -1261,39 +1318,32 @@ _OPS_HTML_RAW = """<!DOCTYPE html>
   <div class="shell">
   <header class="page-head">
     <h1>Консоль — диагностика и MCP</h1>
-    <p class="lede">Токены, статус интеграций, превью Prometheus и отладочные вызовы инструментов. Сводка и модель ROI — на главной странице.</p>
-    <nav class="top-links" aria-label="Связанные страницы">
-      <span class="muted">Метрики — отдельный токен, см. блок «Доступ»</span>
-    </nav>
+    <p class="lede">Токены, статус, Cron Prometheus→Kafka, отладка tools. Сводка ROI — на главной.</p>
   </header>
 
-  <ol class="flow-list">
-    <li>
-      <p class="step-title">Доступ</p>
-      <div class="panel">
-        <p class="muted">Если на сервере задан <code>SDOCS_MCP_UI_TOKEN</code>, для <code>/api/*</code> нужен Bearer. Для <code>/metrics</code> — <code>SDOCS_MCP_METRICS_TOKEN</code> или UI-токен при <code>SDOCS_MCP_METRICS_ACCEPT_UI_BEARER=true</code>.</p>
+  <div class="comparison-grid ops-meta-grid">
+    <div class="panel compact-panel">
+      <h3>Доступ</h3>
+      <p class="muted">Bearer для <code>/api/*</code> и отдельный токен для <code>/metrics</code> при необходимости.</p>
         <p class="muted" id="auth-hint" aria-live="polite"></p>
         <div class="field-group">
-          <label class="field-label" for="token">Токен UI / API</label>
-          <input id="token" type="password" placeholder="SDOCS_MCP_UI_TOKEN (если требуется)" autocomplete="off" />
+          <label class="field-label" for="token">UI / API</label>
+          <input id="token" type="password" placeholder="SDOCS_MCP_UI_TOKEN" autocomplete="off" />
         </div>
         <div class="field-group">
-          <label class="field-label" for="metrics-token">Токен метрик</label>
-          <input id="metrics-token" type="password" placeholder="SDOCS_MCP_METRICS_TOKEN (если требуется)" autocomplete="off" />
+          <label class="field-label" for="metrics-token">Метрики</label>
+          <input id="metrics-token" type="password" placeholder="SDOCS_MCP_METRICS_TOKEN" autocomplete="off" />
         </div>
         <p class="muted" id="cfgpath" aria-live="polite"></p>
+    </div>
+    <div class="panel compact-panel">
+      <h3>Актуальные данные</h3>
+      <p class="muted">Карточки модулей и проверок. Tools, seed, /metrics — во вкладках ниже.</p>
+      <div class="btn-row" style="margin-top:0.5rem;">
+        <button type="button" class="primary" id="btn-refresh">Обновить статус</button>
       </div>
-    </li>
-    <li>
-      <p class="step-title">Актуальные данные</p>
-      <div class="panel">
-        <p class="muted">Обновляет карточки модулей и проверок. Остальные действия (список tools, seed, превью метрик) — во вкладках, где они уместнее.</p>
-        <div class="btn-row">
-          <button type="button" class="primary" id="btn-refresh">Обновить статус</button>
-        </div>
-      </div>
-    </li>
-  </ol>
+    </div>
+  </div>
 
   <p id="status-error" class="alert" role="alert" hidden></p>
 
@@ -1303,6 +1353,7 @@ _OPS_HTML_RAW = """<!DOCTYPE html>
       <button type="button" role="tab" id="tab-services" aria-selected="true" aria-controls="panel-services">Сервисы</button>
       <button type="button" role="tab" id="tab-observe" aria-selected="false" aria-controls="panel-observe" tabindex="-1">Наблюдение</button>
       <button type="button" role="tab" id="tab-mcp" aria-selected="false" aria-controls="panel-mcp" tabindex="-1">MCP и отладка</button>
+      <button type="button" role="tab" id="tab-cron" aria-selected="false" aria-controls="panel-cron" tabindex="-1">Cron</button>
     </div>
 
     <div id="panel-services" role="tabpanel" aria-labelledby="tab-services">
@@ -1319,7 +1370,7 @@ _OPS_HTML_RAW = """<!DOCTYPE html>
       <p class="section-note"><strong>kafka_queue</strong> — оценка объёма сообщений по allowlist (не замена мониторинга кластера). <strong>ui_rate_limiter</strong> — нагрузка на <code>/api/*</code>, не статус брокеров или БД.</p>
       <div class="row" id="status-aux"></div>
       <h2 class="section-title" style="margin-top:1.25rem;">Статус и /metrics</h2>
-      <p class="section-note">Тот же текст, что на странице <a href="{{UI_BASE_PATH}}/status-page" style="color:var(--accent);">статус и метрики</a> — сырой вывод для Prometheus; нужен токен метрик, если сервер его требует.</p>
+      <p class="section-note">Ниже — <strong>метрики самого SDocsMCP</strong> (<code>/metrics</code>). Запросы к вашему Prometheus — tools <code>prometheus_*</code> и вкладка <strong>Cron</strong>. Справка: <code>prometheus_mcp_guide</code>.</p>
       <div class="btn-row" style="margin-bottom:0.5rem;">
         <button type="button" id="btn-metrics">Обновить превью экспозиции /metrics</button>
       </div>
@@ -1343,16 +1394,42 @@ _OPS_HTML_RAW = """<!DOCTYPE html>
       <p class="muted" id="invoke-label"><strong>Ответ</strong></p>
       <pre id="invoke-out" aria-labelledby="invoke-label">—</pre>
     </div>
+
+    <div id="panel-cron" role="tabpanel" aria-labelledby="tab-cron" hidden>
+      <h2 class="section-title">Prometheus → Kafka</h2>
+      <p class="section-note">Фоновый instant query в топик <code>kafka_metrics_topic</code> (по умолчанию <code>sdocs.prometheus.metrics</code>). Нужны Prometheus, Kafka <code>allow_produce</code> и топик в allowlist. Справка MCP: <code>prometheus_mcp_guide</code>.</p>
+      <p id="cron-alert" class="alert" role="alert" hidden></p>
+      <div id="cron-status-box" class="panel" style="margin-bottom:0.75rem;padding:0.85rem;">Загрузка…</div>
+      <form class="cron-form" id="cron-form" onsubmit="return false;">
+        <label><input type="checkbox" id="cron-enabled" checked /> Включено</label>
+        <div>
+          <label for="cron-interval">Интервал</label>
+          <div class="cron-row">
+            <select id="cron-interval">
+              <option value="30">30 сек</option>
+              <option value="60" selected>1 мин</option>
+              <option value="120">2 мин</option>
+              <option value="300">5 мин</option>
+              <option value="custom">Свой (мин)</option>
+            </select>
+            <input type="number" id="cron-interval-custom" min="1" max="1440" placeholder="мин" hidden style="width:5rem;" />
+          </div>
+        </div>
+        <div>
+          <label for="cron-query">PromQL</label>
+          <input type="text" id="cron-query" value="up" style="width:min(100%,28rem);" />
+        </div>
+        <div class="btn-row">
+          <button type="button" class="primary" id="btn-cron-save">Сохранить</button>
+          <button type="button" id="btn-cron-refresh">Обновить статус</button>
+        </div>
+      </form>
+    </div>
   </div>
   </div>
   </div>
   <div class="dashboard-footer">
     <div>SDocsMCP · консоль</div>
-    <div class="theme-switch" id="themeToggle" role="button" tabindex="0" aria-label="Переключить светлую тему">
-      <span>☀</span>
-      <div class="toggle-track"><div class="toggle-thumb"></div></div>
-      <span>☾</span>
-    </div>
   </div>
 </div>
 
@@ -1509,6 +1586,81 @@ _OPS_HTML_RAW = """<!DOCTYPE html>
         host.appendChild(b);
       });
     }
+    function fmtTs(ts) {
+      if (!ts) return '—';
+      try { return new Date(ts * 1000).toLocaleString(); } catch (e) { return String(ts); }
+    }
+    function cronIntervalSeconds() {
+      const sel = $('cron-interval').value;
+      if (sel === 'custom') {
+        const m = parseInt($('cron-interval-custom').value, 10);
+        return (m > 0 ? m : 1) * 60;
+      }
+      return parseInt(sel, 10) || 60;
+    }
+    function setCronIntervalUi(sec) {
+      const presets = ['30', '60', '120', '300'];
+      const s = String(sec);
+      if (presets.includes(s)) {
+        $('cron-interval').value = s;
+        $('cron-interval-custom').hidden = true;
+      } else {
+        $('cron-interval').value = 'custom';
+        $('cron-interval-custom').hidden = false;
+        $('cron-interval-custom').value = String(Math.max(1, Math.round(sec / 60)));
+      }
+    }
+    function renderCronStatus(s) {
+      const box = $('cron-status-box');
+      const alert = $('cron-alert');
+      alert.hidden = true;
+      alert.textContent = '';
+      if (!s.configured) {
+        alert.hidden = false;
+        alert.textContent = s.ready_reason || 'MCP Prometheus не настроен.';
+      } else if (s.ui_workers > 1) {
+        alert.hidden = false;
+        alert.className = 'alert warn';
+        alert.textContent = 'Внимание: SDOCS_MCP_UI_WORKERS=' + s.ui_workers
+          + ' — возможны дубли в Kafka. Лучше workers=1.';
+      } else {
+        alert.className = 'alert';
+      }
+      let stateLabel = 'выключено';
+      if (s.running) stateLabel = 'тик выполняется…';
+      else if (s.active) stateLabel = 'работает';
+      else if (s.enabled && !s.configured) stateLabel = 'включён, но не настроен';
+      const lines = [
+        'Состояние: ' + stateLabel,
+        'Prometheus: ' + (s.prometheus_base_url || '—'),
+        'Топик Kafka: ' + (s.kafka_topic || '—'),
+        'Интервал: ' + s.interval_seconds + ' с (тик до ~' + (s.tick_budget_hint_seconds || 65) + ' с)',
+        'PromQL: ' + s.query,
+        'Последний запуск: ' + fmtTs(s.last_run_at),
+        'Последний успех: ' + fmtTs(s.last_success_at),
+        'Запусков: ' + s.runs_total + ' (успехов ' + s.successes_total + ', пропусков ' + s.skips_total + ')',
+        s.last_skip_reason ? ('Последний пропуск: ' + s.last_skip_reason) : '',
+        s.last_error ? ('Последняя ошибка: ' + s.last_error) : '',
+        s.mcp_tools_hint || ''
+      ].filter(Boolean);
+      box.innerHTML = '<p class="muted" style="margin:0;">' + lines.map(l => l.replace(/</g, '&lt;')).join('<br>') + '</p>';
+      $('cron-enabled').checked = !!s.enabled;
+      setCronIntervalUi(s.interval_seconds);
+      $('cron-query').value = s.query || 'up';
+    }
+    async function loadCronStatus() {
+      const s = await jget('/api/prometheus-metrics-cron');
+      renderCronStatus(s);
+    }
+    async function saveCron() {
+      const body = {
+        enabled: $('cron-enabled').checked,
+        interval_seconds: cronIntervalSeconds(),
+        query: ($('cron-query').value || '').trim() || 'up'
+      };
+      const s = await jpost('/api/prometheus-metrics-cron', body);
+      renderCronStatus(s);
+    }
     async function boot() {
       const saved = localStorage.getItem('sdocs_mcp_ui_token') || '';
       $('token').value = saved;
@@ -1545,6 +1697,12 @@ _OPS_HTML_RAW = """<!DOCTYPE html>
       $('btn-seed').onclick = () => seed().catch(e => { $('invoke-out').textContent = 'Ошибка: ' + e; });
       $('btn-mail-test').onclick = () => mailTest().catch(e => { $('invoke-out').textContent = 'Ошибка: ' + e; });
       $('btn-metrics').onclick = () => refreshMetricsPreview().catch(e => { $('metrics-preview').textContent = String(e); });
+      $('cron-interval').onchange = () => {
+        $('cron-interval-custom').hidden = $('cron-interval').value !== 'custom';
+      };
+      $('btn-cron-save').onclick = () => saveCron().catch(e => alert(e));
+      $('btn-cron-refresh').onclick = () => loadCronStatus().catch(e => alert(e));
+      await loadCronStatus().catch(() => {});
       await refreshStatus().catch(e => {
         const err = $('status-error');
         err.hidden = false;
@@ -1714,6 +1872,10 @@ def main() -> None:
     log_level = (os.environ.get("SDOCS_MCP_LOG_LEVEL") or "info").strip().lower()
     if workers > 1:
         log.info("Uvicorn workers=%s (SDOCS_MCP_UI_WORKERS)", workers)
+        log.warning(
+            "SDOCS_MCP_UI_WORKERS>1: фоновый Prometheus→Kafka Cron запускается в каждом воркере — "
+            "дубли сообщений. Рекомендуется workers=1 или SDOCS_MCP_PROMETHEUS_CRON=false."
+        )
     if (
         workers > 1
         and (os.environ.get("SDOCS_MCP_EMBED_MCP") or "").strip().lower() in ("1", "true", "yes")
