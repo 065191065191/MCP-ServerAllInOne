@@ -1,5 +1,5 @@
-﻿# См. deploy/Dockerfile — канонический прод-образ (UI + бинарники MCP), тег sdocs-mcp-ui:0.6.2.
-# Из корня: docker build -f deploy/Dockerfile -t sdocs-mcp-ui:0.6.2 .  |  из этого файла: docker build -t sdocs-mcp-ui:0.6.2 .
+﻿# См. deploy/Dockerfile — канонический прод-образ (UI + бинарники MCP), тег sdocs-mcp-ui:0.6.3.
+# Из корня: docker build -f deploy/Dockerfile -t sdocs-mcp-ui:0.6.3 .  |  из этого файла: docker build -t sdocs-mcp-ui:0.6.3 .
 #
 # FastMCP (pydantic-settings) по умолчанию читает .env из WORKDIR → /app/.env.
 # Пустой читаемый файл в образе избегает падения при stat(), если снаружи не смонтирован недоступный .env.
@@ -45,7 +45,7 @@ RUN pip install --no-cache-dir --upgrade pip \
 
 USER sdocsmcp
 LABEL org.opencontainers.image.title="SDocsMCP"
-LABEL org.opencontainers.image.version="0.6.2"
+LABEL org.opencontainers.image.version="0.6.3"
 
 # Опционально при запуске контейнера: SDOCS_MCP_STATELESS_HTTP=true — см. README.
 ENV PYTHONUNBUFFERED=1 \

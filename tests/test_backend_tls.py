@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from sdocs_mcp.backend_tls import resolve_client_mtls, validate_client_mtls_triplet_files
-from sdocs_mcp.config import RedisModuleConfig
+from sdocs_mcp.backend_tls import make_postgres_conninfo, resolve_client_mtls, validate_client_mtls_triplet_files
+from sdocs_mcp.config import PostgresModuleConfig, RedisModuleConfig
 
 
 def test_mtls_incomplete_raises() -> None:
@@ -38,3 +38,19 @@ def test_resolve_simple_obj(tmp_path) -> None:
     m = resolve_client_mtls(MtlsHolder())
     assert m is not None
     assert m.cert.endswith("a.pem")
+
+
+def test_postgres_conninfo_uses_mtls_sslmode(tmp_path) -> None:
+    a, b, c = tmp_path / "a.pem", tmp_path / "b.pem", tmp_path / "ca.pem"
+    for p in (a, b, c):
+        p.write_text("x", encoding="utf-8")
+    cfg = PostgresModuleConfig(
+        dsn="postgresql://u:p@1.1.1.1:1111/db",
+        mtls_cert_file=str(a),
+        mtls_key_file=str(b),
+        mtls_root_ca_file=str(c),
+        mtls_sslmode="verify-ca",
+    )
+    conn = make_postgres_conninfo(cfg)
+    assert "sslmode=verify-ca" in conn
+    assert "sslmode=verify-full" not in conn

@@ -5,6 +5,12 @@
 
 ## [Unreleased]
 
+## [0.6.3] — 2026-05-15
+
+### Исправлено
+
+- **PostgreSQL mTLS:** при подключении с `mtls_*` используется `modules.postgres.mtls_sslmode` из конфига (по умолчанию `verify-ca`), а не принудительный `verify-full` — устранена ошибка «certificate … do not match host name» при коннекте по IP.
+
 ## [0.6.2] — 2026-05-15
 
 ### Добавлено

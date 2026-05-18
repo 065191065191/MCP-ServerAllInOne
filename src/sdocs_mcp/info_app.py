@@ -56,7 +56,7 @@ _INVOKE_ALLOWLIST: dict[str, dict[str, Any] | None] = {
 
 UI_BASE = normalize_ui_base_path()
 
-app = FastAPI(title="SDocsMCP UI", version="0.6.2")
+app = FastAPI(title="SDocsMCP UI", version="0.6.3")
 web_router = APIRouter()
 
 install_access_logging(app, load_config().logging)

@@ -82,7 +82,7 @@ def make_postgres_conninfo(cfg: Any) -> str:
     info = conninfo_to_dict(cfg.dsn)
     m = resolve_client_mtls(cfg)
     if m:
-        info["sslmode"] = "verify-full"
+        info["sslmode"] = (getattr(cfg, "mtls_sslmode", None) or "verify-ca").strip()
         info["sslcert"] = m.cert
         info["sslkey"] = libpq_sslkey_path(m.key)
         info["sslrootcert"] = m.ca
