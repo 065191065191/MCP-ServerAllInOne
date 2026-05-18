@@ -318,6 +318,7 @@ class MailModuleConfig(BaseModel):
     imap_ssl: bool = True
     imap_username: str = ""
     imap_username_env: str | None = None
+    imap_password: str = ""
     imap_password_env: str = ""
     default_mailbox: str = "INBOX"
     # Имя переменной окружения с адресом From (опционально).
@@ -330,15 +331,19 @@ class MailModuleConfig(BaseModel):
     smtp_ssl: bool = False
     smtp_starttls: bool = True
     smtp_timeout_seconds: int = 30
+    smtp_username: str = ""
     smtp_username_env: str | None = None
+    smtp_password: str = ""
     smtp_password_env: str | None = None
 
     @model_validator(mode="after")
     def _validate_mail(self) -> Self:
         if not self.enabled:
             return self
-        if not (self.imap_password_env or "").strip():
-            raise ValueError("mail.imap_password_env must be set when mail is enabled")
+        if not (self.imap_password or "").strip() and not (self.imap_password_env or "").strip():
+            raise ValueError(
+                "mail: задайте imap_password или imap_password_env при enabled: true"
+            )
         if not (self.imap_host or "").strip():
             raise ValueError("mail.imap_host must be non-empty when mail is enabled")
         if not (self.smtp_host or "").strip():
@@ -412,6 +417,14 @@ class SshModuleConfig(BaseModel):
         return self
 
 
+class AccessLogConfig(BaseModel):
+    """Combined access log (формат nginx) в консоль и файл."""
+
+    enabled: bool = False
+    directory: str = "logs"
+    filename: str = "mcp-access.log"
+
+
 class ModulesConfig(BaseModel):
     opensearch: OpenSearchModuleConfig = Field(default_factory=OpenSearchModuleConfig)
     kafka: KafkaModuleConfig = Field(default_factory=KafkaModuleConfig)
@@ -424,6 +437,7 @@ class ModulesConfig(BaseModel):
 
 class AppConfig(BaseModel):
     modules: ModulesConfig = Field(default_factory=ModulesConfig)
+    logging: AccessLogConfig = Field(default_factory=AccessLogConfig)
 
 
 def _load_yaml(path: Path) -> dict:

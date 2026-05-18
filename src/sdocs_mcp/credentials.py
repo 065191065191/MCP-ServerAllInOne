@@ -20,3 +20,10 @@ def env_required(name: str | None, *, what: str) -> str:
     if v is None or v == "":
         raise ValueError(f"{what}: set environment variable {label!r}")
     return v
+
+
+def config_or_env(plain: str | None, env_name: str | None, *, what: str) -> str:
+    """Значение из YAML (plain) или из переменной окружения (env_name)."""
+    if (plain or "").strip():
+        return str(plain).strip()
+    return env_required(env_name, what=what)

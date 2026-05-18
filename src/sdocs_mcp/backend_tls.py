@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import os
+import shutil
 import ssl
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -42,6 +45,23 @@ def validate_client_mtls_triplet_files(
             raise ValueError(f"{label}: файл не найден: {p}")
 
 
+def libpq_sslkey_path(key_path: str) -> str:
+    """Путь к ключу для libpq: при широких правах на файле — копия с mode 0o600 (требование libpq)."""
+    p = Path(key_path).expanduser().resolve()
+    if (p.stat().st_mode & 0o077) == 0:
+        return str(p)
+    fd, tmp = tempfile.mkstemp(prefix="sdocs-pgssl-", suffix=".key")
+    os.close(fd)
+    tmp_p = Path(tmp)
+    try:
+        shutil.copy2(p, tmp_p)
+        os.chmod(tmp_p, 0o600)
+        return str(tmp_p)
+    except Exception:
+        tmp_p.unlink(missing_ok=True)
+        raise
+
+
 def resolve_client_mtls(cfg: Any) -> ClientMtlsPaths | None:
     c = (getattr(cfg, "mtls_cert_file", None) or "").strip()
     k = (getattr(cfg, "mtls_key_file", None) or "").strip()
@@ -64,7 +84,7 @@ def make_postgres_conninfo(cfg: Any) -> str:
     if m:
         info["sslmode"] = "verify-full"
         info["sslcert"] = m.cert
-        info["sslkey"] = m.key
+        info["sslkey"] = libpq_sslkey_path(m.key)
         info["sslrootcert"] = m.ca
         if m.key_password:
             info["sslpassword"] = m.key_password

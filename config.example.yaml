@@ -58,10 +58,7 @@ modules:
     basic_auth_password: null
 
   # ───── Mail (IMAP + SMTP) ───────────────────────────────────────
-  # Зачем: чтение ящика и отправка писем. Пароли — ТОЛЬКО через env (поля *_env).
-  # Минимум для включения:
-  #   export SDOCS_MCP_MAIL_IMAP_USER=...
-  #   export SDOCS_MCP_MAIL_IMAP_PASSWORD=...
+  # Зачем: чтение ящика и отправка писем. Логин/пароль — в YAML или через *_env.
   mail:
     enabled: false
     # IMAP
@@ -70,7 +67,8 @@ modules:
     imap_ssl: true
     imap_username: ""                     # пусто — взять из env (поле ниже)
     imap_username_env: SDOCS_MCP_MAIL_IMAP_USER
-    imap_password_env: SDOCS_MCP_MAIL_IMAP_PASSWORD    # обязателен при enabled: true
+    imap_password: ""                     # либо imap_password_env при enabled: true
+    imap_password_env: SDOCS_MCP_MAIL_IMAP_PASSWORD
     default_mailbox: INBOX
     # SMTP
     smtp_host: mail.internal
@@ -78,4 +76,11 @@ modules:
     smtp_ssl: false
     smtp_starttls: true
     smtp_username_env: SDOCS_MCP_MAIL_SMTP_USER
+    smtp_password: ""
     smtp_password_env: SDOCS_MCP_MAIL_SMTP_PASSWORD
+
+# Access log MCP/UI (формат nginx combined) — консоль + файл
+logging:
+  enabled: false
+  directory: logs
+  filename: mcp-access.log

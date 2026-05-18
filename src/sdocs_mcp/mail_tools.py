@@ -6,7 +6,7 @@ import smtplib
 from email.message import EmailMessage
 
 from sdocs_mcp.config import MailModuleConfig
-from sdocs_mcp.credentials import env_optional, env_required
+from sdocs_mcp.credentials import config_or_env, env_optional
 
 
 def _imap_user(cfg: MailModuleConfig) -> str:
@@ -20,10 +20,13 @@ def _imap_user(cfg: MailModuleConfig) -> str:
 
 
 def _imap_pass(cfg: MailModuleConfig) -> str:
-    return env_required(cfg.imap_password_env, what="mail IMAP password")
+    return config_or_env(cfg.imap_password, cfg.imap_password_env, what="mail IMAP password")
 
 
 def _smtp_user(cfg: MailModuleConfig) -> str:
+    u = (cfg.smtp_username or "").strip()
+    if u:
+        return u
     env_u = env_optional(cfg.smtp_username_env)
     if env_u:
         return env_u
@@ -31,9 +34,8 @@ def _smtp_user(cfg: MailModuleConfig) -> str:
 
 
 def _smtp_pass(cfg: MailModuleConfig) -> str:
-    env_n = (cfg.smtp_password_env or "").strip()
-    if env_n:
-        return env_required(env_n, what="mail SMTP password")
+    if (cfg.smtp_password or "").strip() or (cfg.smtp_password_env or "").strip():
+        return config_or_env(cfg.smtp_password, cfg.smtp_password_env, what="mail SMTP password")
     return _imap_pass(cfg)
 
 

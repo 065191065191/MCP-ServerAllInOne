@@ -110,7 +110,11 @@ _DASHBOARD_HTML_RAW = """<!DOCTYPE html>
     .legend-body { padding: 18px; }
     .legend-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
     .scenario-card { background: var(--bg-card); border-radius: 16px; padding: 12px 14px; border: 0.5px solid var(--border-light); }
-    .formula-row { grid-column: span 2; background: var(--bg-card); border-radius: 16px; padding: 14px; margin-top: 8px; }
+    .mail-test-btn {
+      margin-top: 8px; padding: 4px 10px; font-size: 10px; border-radius: 8px;
+      border: 1px solid var(--border-light); background: var(--bg-card-light); cursor: pointer;
+    }
+    .mail-test-btn:hover { border-color: var(--accent); }
     .dynamic-note { grid-column: span 2; display: flex; justify-content: space-between; font-size: 11px; color: var(--text-secondary); padding-top: 12px; border-top: 0.5px dashed var(--border-light); margin-top: 8px; flex-wrap: wrap; gap: 12px; }
     .servers-list { display: flex; flex-direction: column; gap: 14px; padding: 20px; }
     .server-item { background: var(--bg-card-light); border-radius: 20px; border: 0.5px solid var(--border-light); transition: 0.2s; }
@@ -201,11 +205,6 @@ _DASHBOARD_HTML_RAW = """<!DOCTYPE html>
               <div style="display: flex; justify-content: space-between; margin: 8px 0;"><span>3+ специалистов</span><span>85 мин</span></div>
               <div style="display: flex; justify-content: space-between;"><span>Затраты (чел·ч)</span><span><strong>4.25</strong></span></div>
             </div>
-            <div class="formula-row">
-              <div style="font-size: 10px; text-transform: uppercase; color: var(--text-muted);">База для месяца (модель)</div>
-              <div class="mono" style="font-size: 11px; margin: 6px 0;" id="formulaLine">—</div>
-              <div style="display: flex; justify-content: flex-end;"><span style="background: var(--bg-card-light); padding: 2px 10px; border-radius: 20px; font-size: 10px;">≈ <span id="formulaSaved">—</span> / выбранный период</span></div>
-            </div>
             <div class="dynamic-note">
               <span>Серверов в списке: <strong id="dynMcp">—</strong> (данные с <code>/api/dashboard-stats</code>)</span>
               <span>Обновление: <strong>35 с</strong></span>
@@ -240,9 +239,6 @@ _DASHBOARD_HTML_RAW = """<!DOCTYPE html>
   let currentPeriod = 'month';
   let baseSavedHoursMonth = 14832;
   let rubPerHour = 1875;
-  let togglePenaltyHours = 0;
-  const TOGGLE_DELTA = 380;
-
   function authHeader() {
     const t = (localStorage.getItem('sdocs_mcp_ui_token') || '').trim();
     return t ? { 'Authorization': 'Bearer ' + t } : {};
@@ -269,10 +265,7 @@ _DASHBOARD_HTML_RAW = """<!DOCTYPE html>
     const raw = Math.max(0, (manualH - mcpH) * inc * coef);
     const health = (payload.summary || {}).uptime_score_pct;
     const hFactor = typeof health === 'number' ? (0.85 + 0.15 * (health / 100)) : 1;
-    const up = payload.summary.mcp_healthy_count || 0;
-    const en = payload.summary.mcp_enabled_count || 1;
-    const slot = Math.min(1, up / Math.max(1, en));
-    return Math.floor(raw * hFactor * slot);
+    return Math.floor(raw * hFactor);
   }
 
   function applyPayload(payload) {
@@ -291,18 +284,15 @@ _DASHBOARD_HTML_RAW = """<!DOCTYPE html>
     $('dynMcp').textContent = String((payload.modules || []).length);
     const lat = s.avg_check_latency_ms;
     $('dynLat').textContent = typeof lat === 'number' ? lat + ' ms' : '—';
-    const inc = (payload.business_defaults || {}).incidents_month || 1200;
-    $('formulaLine').textContent = 'инциденты/мес ' + inc + ' · (t_ручн − t_MCP) · коэф., скоррект. по health';
     updatePeriodMetrics();
     renderServers(payload.modules || []);
   }
 
   function updatePeriodMetrics() {
     const mult = getMultiplier(currentPeriod);
-    const hrs = Math.max(0, Math.floor(baseSavedHoursMonth * mult) - togglePenaltyHours);
+    const hrs = Math.max(0, Math.floor(baseSavedHoursMonth * mult));
     const money = hrs * rubPerHour;
     $('savedHoursMetric').textContent = hrs.toLocaleString('ru-RU');
-    $('formulaSaved').textContent = hrs.toLocaleString('ru-RU') + ' чел·ч';
     $('savedHoursDisplay').textContent = hrs.toLocaleString('ru-RU');
     $('savedMoneyDisplay').textContent = formatMoneyRub(money);
     $('periodNote').textContent = currentPeriod === 'day' ? 'за сутки (пропорция месяца)' : (currentPeriod === 'week' ? 'за 7 дней' : 'за 30 дней');
@@ -336,7 +326,7 @@ _DASHBOARD_HTML_RAW = """<!DOCTYPE html>
         '<div class="toggle-switch ' + (st !== 'offline' ? 'active' : '') + '"><div class="knob"></div></div></div></div>' +
         '<div class="server-metrics"><span>latency ' + lat + '</span><span>' + (srv.enabled ? 'включён' : 'выкл. в конфиге') + '</span></div>' +
         '<div class="server-footer"><span>' + (srv.detail || '').slice(0, 120) + '</span><span>' +
-        (st === 'online' ? 'OK' : st === 'degraded' ? 'проверка не прошла' : 'не активен') + '</span></div>';
+        (st === 'online' ? 'OK' : st === 'degraded' ? 'проверка не прошла' : 'не активен') + '</span></div>' + ((srv.type === 'mail' && srv.enabled) ? '<button type="button" class="mail-test-btn" data-mail-test="1">✉ Тест (себе)</button>' : '');
       container.appendChild(div);
     });
     document.querySelectorAll('.toggle-mcp').forEach((el) => {
@@ -346,15 +336,23 @@ _DASHBOARD_HTML_RAW = """<!DOCTYPE html>
         const srv = mods[idx];
         if (!srv || !srv.enabled) return;
         const toggleDiv = el.querySelector('.toggle-switch');
-        const isActive = toggleDiv.classList.contains('active');
-        if (isActive) {
-          toggleDiv.classList.remove('active');
-          togglePenaltyHours += TOGGLE_DELTA;
-        } else {
-          toggleDiv.classList.add('active');
-          togglePenaltyHours = Math.max(0, togglePenaltyHours - TOGGLE_DELTA);
+        toggleDiv.classList.toggle('active');
+      });
+    });
+    container.querySelectorAll('[data-mail-test]').forEach((btn) => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        btn.disabled = true;
+        try {
+          const r = await fetch(__UI_BASE + '/api/mail/test-send', { method: 'POST', headers: authHeader() });
+          const txt = await r.text();
+          if (!r.ok) throw new Error(txt);
+          alert('Тестовое письмо отправлено.');
+        } catch (err) {
+          alert('Ошибка отправки: ' + err);
+        } finally {
+          btn.disabled = false;
         }
-        updatePeriodMetrics();
       });
     });
   }
@@ -379,9 +377,11 @@ _DASHBOARD_HTML_RAW = """<!DOCTYPE html>
     });
   });
   $('resetMetricsBtn').addEventListener('click', () => {
-    togglePenaltyHours = 0;
-    if (lastPayload) applyPayload(lastPayload);
-    else refresh();
+    currentPeriod = 'month';
+    document.querySelectorAll('.period-btn').forEach((b) => {
+      b.classList.toggle('active', b.getAttribute('data-period') === 'month');
+    });
+    refresh();
   });
   $('themeToggle').addEventListener('click', () => document.body.classList.toggle('light'));
   $('themeToggle').addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); document.body.classList.toggle('light'); } });

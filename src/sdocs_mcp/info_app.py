@@ -26,7 +26,8 @@ from sdocs_mcp.backend_tls import (
 from sdocs_mcp.config import AppConfig, load_config
 from sdocs_mcp.executive_dashboard_html import DASHBOARD_HTML
 from sdocs_mcp.kafka_tools import kafka_broker_client_config
-from sdocs_mcp.mail_tools import mail_imap_verify
+from sdocs_mcp.http_access_log import install_access_logging
+from sdocs_mcp.mail_tools import _imap_user, mail_imap_verify, mail_smtp_send
 from sdocs_mcp.mtls import resolve_mcp_mtls_uvicorn_kwargs
 from sdocs_mcp.opensearch_tools import connect_opensearch
 from sdocs_mcp.postgres_tools import postgres_allowlisted_query_catalog
@@ -55,8 +56,10 @@ _INVOKE_ALLOWLIST: dict[str, dict[str, Any] | None] = {
 
 UI_BASE = normalize_ui_base_path()
 
-app = FastAPI(title="SDocsMCP UI", version="0.6.1")
+app = FastAPI(title="SDocsMCP UI", version="0.6.2")
 web_router = APIRouter()
+
+install_access_logging(app, load_config().logging)
 
 _trusted_hosts_raw = (os.environ.get("SDOCS_MCP_UI_TRUSTED_HOSTS") or "").strip()
 if _trusted_hosts_raw:
@@ -596,6 +599,34 @@ async def executive_dashboard() -> str:
 @web_router.get("/ops", response_class=HTMLResponse)
 async def ops_console() -> str:
     return _OPS_HTML
+
+
+@web_router.post("/api/mail/test-send")
+async def api_mail_test_send(req: Request) -> JSONResponse:
+    """Тест SMTP: письмо на адрес IMAP-пользователя."""
+    started = time.perf_counter()
+    ok = False
+    try:
+        _secure_api(req, "mail_test_send")
+        cfg = _cfg()
+        mail_cfg = cfg.modules.mail
+        if not mail_cfg.enabled:
+            raise HTTPException(status_code=404, detail="mail module disabled")
+        to_addr = _imap_user(mail_cfg)
+        body = mail_smtp_send(
+            mail_cfg,
+            to_addr,
+            "SDocsMCP test",
+            "Тестовое письмо с панели SDocsMCP (отправка самому себе).",
+        )
+        ok = True
+        return JSONResponse(json.loads(body))
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e)[:300]) from e
+    finally:
+        _record_request_timing(started, ok)
 
 
 @web_router.get("/api/dashboard-stats")

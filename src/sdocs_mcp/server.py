@@ -42,6 +42,7 @@ from sdocs_mcp.config import (
     SshModuleConfig,
     load_config,
 )
+from sdocs_mcp.http_access_log import install_access_logging
 from sdocs_mcp.mtls import resolve_mcp_mtls_uvicorn_kwargs
 from sdocs_mcp.tool_audit_http_context import ToolAuditCallerMiddleware
 
@@ -546,6 +547,7 @@ async def _run_mcp_http_server(
             audit_cfg=os_mod.tool_call_audit,
             path_prefix=None,
         )
+    install_access_logging(starlette_app, app_cfg.logging)
     kw: dict[str, Any] = {
         "host": mcp.settings.host,
         "port": mcp.settings.port,
