@@ -44,6 +44,7 @@ from sdocs_mcp.config import (
 )
 from sdocs_mcp.http_access_log import install_access_logging
 from sdocs_mcp.mcp_telemetry import wrap_mcp_http_app
+from sdocs_mcp.mcp_agent_guide import build_capabilities_payload, build_mcp_instructions, capabilities_json
 from sdocs_mcp.mtls import resolve_mcp_mtls_uvicorn_kwargs
 from sdocs_mcp.tool_audit_http_context import ToolAuditCallerMiddleware
 
@@ -492,31 +493,9 @@ def build_mcp(
     port: int = 8765,
     streamable_http_path: str | None = None,
 ) -> FastMCP:
-    _instr = (
-        "Modular data-plane MCP over HTTP (Streamable HTTP or SSE). "
-        "Only enabled backends register tools. "
-        "PostgreSQL: fixed diagnostic queries; optional allowlisted_queries in config — "
-        "postgres_allowlisted_query(query_id) runs only ids from postgres_allowlisted_query_catalog (no raw SQL from clients). "
-        "When modules.ssh.enabled, ssh_command_policy exposes SSH command rules."
-    )
-    if app.modules.opensearch.enabled and app.modules.opensearch.rag.enabled:
-        _instr += (
-            " OpenSearch RAG: shared agent memory — call opensearch_rag_policy first; "
-            "store durable facts only via opensearch_rag_store into allowlisted indices; "
-            "retrieve context with opensearch_rag_search (not unbounded)."
-        )
-    if app.modules.prometheus.enabled:
-        prom = app.modules.prometheus
-        _instr += (
-            " Prometheus (remote server at modules.prometheus.base_url, NOT this MCP host /metrics): "
-            "call prometheus_mcp_guide first; use prometheus_query_instant / prometheus_query_range "
-            "for PromQL; prometheus_export_instant_to_kafka publishes JSON to Kafka "
-            f"(default topic {prom.kafka_metrics_topic!r}, allowlisted). "
-            "SDocsMCP /metrics and UI /metrics are only this app's own counters."
-        )
     _fm_kw: dict[str, Any] = {
         "name": "sdocs-mcp",
-        "instructions": _instr,
+        "instructions": build_mcp_instructions(app),
         "host": host,
         "port": port,
     }
@@ -530,11 +509,19 @@ def build_mcp(
         mcp = FastMCP(**_fm_kw)
 
     @mcp.tool()
+    def sdocs_mcp_capabilities() -> str:
+        """Путеводитель для агента: все tools по модулям, сценарии, типичные ошибки. Вызовите в начале сессии вместе с sdocs_mcp_status."""
+        return capabilities_json(app)
+
+    @mcp.tool()
     def sdocs_mcp_status() -> str:
-        """Which backends are enabled in config (no credentials)."""
+        """Какие модули enabled в конфиге (без секретов). Для полного списка tools — sdocs_mcp_capabilities."""
+        cap = build_capabilities_payload(app)
         return json.dumps(
             {
                 "stateless_http": mcp.settings.stateless_http,
+                "tools_total": cap["tools_total"],
+                "hint": "Полный каталог tools и сценарии: вызовите sdocs_mcp_capabilities",
                 "postgres": app.modules.postgres.enabled,
                 "postgres_allowlisted_query_ids": (
                     [q.id for q in app.modules.postgres.allowlisted_queries]
@@ -561,6 +548,7 @@ def build_mcp(
                 },
             },
             indent=2,
+            ensure_ascii=False,
         )
 
     if app.modules.postgres.enabled:

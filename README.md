@@ -179,9 +179,11 @@ sdocs-mcp
 
 ## Веб-UI и один порт с MCP
 
-При **`SDOCS_MCP_EMBED_MCP=true`** процесс **`sdocs-mcp-ui`** отдаёт MCP на **`http://<хост>:<порт>/mcp`** (или **`http://<хост>:<порт><SDOCS_MCP_UI_BASE_PATH>/mcp`**, если задан префикс UI) на том же порту, что UI и `/metrics`. Либо **`SDOCS_MCP_UI_WORKERS=1`**, либо **`SDOCS_MCP_STATELESS_HTTP=true`** при большем числе воркеров или реплик.
+При **`SDOCS_MCP_EMBED_MCP=true`** процесс **`sdocs-mcp-ui`** отдаёт MCP на **`http://<хост>:<порт>/sdocs/mcp`** (по умолчанию; путь = **`<SDOCS_MCP_UI_BASE_PATH>/mcp`**) на том же порту, что UI и `/sdocs/metrics`. Либо **`SDOCS_MCP_UI_WORKERS=1`**, либо **`SDOCS_MCP_STATELESS_HTTP=true`** при большем числе воркеров или реплик.
 
-**Префикс путей веба:** **`SDOCS_MCP_UI_BASE_PATH`** (например `/mcp-server`) — единый префикс для `/health`, `/ready`, `/api/*`, `/metrics`, встроенного MCP и статических страниц. Пусто или `/` — без префикса (как раньше).
+**Префикс приложения:** по умолчанию **`SDOCS_MCP_UI_BASE_PATH=/sdocs`** — `/sdocs/health`, `/sdocs/api/*`, `/sdocs/metrics`, MCP на **`/sdocs/mcp`**, landing на **`/sdocs/`**. Корень хоста **`/`** не занят (на том же origin могут жить другие сервисы). Пусто или `/` — всё на корне (отдельный порт / локальная отладка).
+
+**HTML-консоль:** по умолчанию **`SDOCS_MCP_UI_PAGES_PREFIX=/console`** → **`/sdocs/console/`** (дашборд, ops, cron). Пусто — страницы прямо под `/sdocs/`.
 
 **stdio по умолчанию отключён** без `SDOCS_MCP_DEV_LOCAL=true`.
 
@@ -220,9 +222,11 @@ export SDOCS_MCP_CONFIG="$PWD/config.docker.yaml"
 sdocs-mcp-ui
 ```
 
-- Дашборд: [http://127.0.0.1:8888](http://127.0.0.1:8888)
-- Операции: [http://127.0.0.1:8888/ops](http://127.0.0.1:8888/ops)
-- Статус: `/status-page`, метрики: `/metrics`
+- MCP (агенты): [http://127.0.0.1:8888/sdocs/mcp](http://127.0.0.1:8888/sdocs/mcp)
+- Landing: [http://127.0.0.1:8888/sdocs/](http://127.0.0.1:8888/sdocs/)
+- Дашборд: [http://127.0.0.1:8888/sdocs/console/](http://127.0.0.1:8888/sdocs/console/)
+- Консоль: [http://127.0.0.1:8888/sdocs/console/ops](http://127.0.0.1:8888/sdocs/console/ops)
+- Метрики: `/sdocs/metrics`. Корень `http://127.0.0.1:8888/` — не SDocsMCP.
 
 Скрипт: **`scripts/run-demo.sh`**.
 

@@ -8,7 +8,7 @@
 
 ```bash
 docker load -i sdocs-mcp-ui-0.6.2.tar
-# Один порт: UI + MCP Streamable HTTP на http://127.0.0.1:8888/mcp
+# Один порт: UI + MCP на http://127.0.0.1:8888/sdocs/mcp (префикс /sdocs по умолчанию)
 docker run --rm -p 127.0.0.1:8888:8888 \
   -e SDOCS_MCP_CONFIG=/etc/sdocs-mcp/config.yaml \
   -e SDOCS_MCP_EMBED_MCP=true \
@@ -53,14 +53,14 @@ docker save sdocs-mcp-ui:0.6.2 -o deploy/sdocs-mcp-ui-0.6.2.tar
 2. `cp deploy/env.production.example deploy/.env` — задайте `SDOCS_MCP_CONFIG_HOST_PATH`, токены, `SDOCS_MCP_UI_BIND`.
 3. `docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env build`
 4. `docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env up -d`
-5. Проверка: `curl -fsS http://127.0.0.1:8888/health` и `curl -fsS http://127.0.0.1:8888/ready` (порт см. `.env`).
+5. Проверка: `curl -fsS http://127.0.0.1:8888/sdocs/health` и `curl -fsS http://127.0.0.1:8888/sdocs/ready` (порт см. `.env`).
 
 За reverse proxy включите `SDOCS_MCP_UI_TRUSTED_HOSTS` (список Host через запятую).
 
 ## Безопасность (минимум)
 
 - Обязательные **`SDOCS_MCP_UI_TOKEN`** и секрет на **`/metrics`** в проде при доступе из сети (`SDOCS_MCP_METRICS_REQUIRE_TOKEN=true`).
-- **`SDOCS_MCP_EMBED_MCP=true`**: MCP доступен на **`/mcp`** на том же порту, что UI — защищайте **весь** фронт (и `/mcp`) через reverse proxy, **`SDOCS_MCP_UI_TRUSTED_HOSTS`**, и/или **`SDOCS_MCP_MTLS_*`** (TLS + обязательный клиентский сертификат на uvicorn).
+- **`SDOCS_MCP_EMBED_MCP=true`**: MCP доступен на **`/sdocs/mcp`** (или `<SDOCS_MCP_UI_BASE_PATH>/mcp`) на том же порту, что UI — защищайте **весь** фронт (и `/mcp`) через reverse proxy, **`SDOCS_MCP_UI_TRUSTED_HOSTS`**, и/или **`SDOCS_MCP_MTLS_*`** (TLS + обязательный клиентский сертификат на uvicorn).
 - При встроенном MCP держите **`SDOCS_MCP_UI_WORKERS=1`**, либо включите **`SDOCS_MCP_STATELESS_HTTP=true`** (stateless Streamable HTTP — без серверной привязки сессии; удобно при нескольких репликах или воркерах за балансировщиком без sticky).
 - **`SDOCS_MCP_UI_ENABLE_INVOKE`** и **`SDOCS_MCP_UI_ENABLE_SEED`** оставьте `false`, если UI только для мониторинга.
 - Секреты только в env / смонтированных файлах; в репозитории — только примеры без реальных паролей.

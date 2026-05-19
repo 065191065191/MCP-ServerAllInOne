@@ -1,5 +1,5 @@
 # Образ: веб UI + встроенный MCP Streamable HTTP на одном порту (8888, путь /mcp).
-# Сборка: docker build -f deploy/Dockerfile -t sdocs-mcp-ui:0.6.6 .
+# Сборка: docker build -f deploy/Dockerfile -t sdocs-mcp-ui:0.6.7 .
 #
 # FastMCP (pydantic-settings) по умолчанию читает .env из WORKDIR → /app/.env.
 # Пустой читаемый файл в образе избегает падения при stat(), если снаружи не смонтирован недоступный .env.
@@ -55,6 +55,6 @@ ENV PYTHONUNBUFFERED=1 \
 EXPOSE 8888
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-    CMD curl -fsS http://127.0.0.1:8888/health || exit 1
+    CMD curl -fsS http://127.0.0.1:8888/sdocs/health || exit 1
 
 CMD ["sdocs-mcp-ui"]

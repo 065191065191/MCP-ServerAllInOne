@@ -18,7 +18,7 @@ import httpx
 import psycopg
 import uvicorn
 from fastapi import APIRouter, FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
 from kafka import KafkaConsumer, TopicPartition
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
@@ -28,6 +28,8 @@ from sdocs_mcp.backend_tls import (
 )
 from sdocs_mcp.config import AppConfig, load_config
 from sdocs_mcp.executive_dashboard_html import DASHBOARD_HTML
+from sdocs_mcp.ui_alerts_page import ALERTS_PAGE_HTML
+from sdocs_mcp.ui_cron_page import CRON_PAGE_HTML
 from sdocs_mcp.kafka_tools import kafka_broker_client_config
 from sdocs_mcp.http_access_log import install_access_logging
 from sdocs_mcp.mcp_telemetry import mcp_http_requests_total, wrap_mcp_http_app
@@ -39,7 +41,11 @@ from sdocs_mcp.redis_tools import redis_ping, redis_setex
 from sdocs_mcp.server import build_mcp
 from sdocs_mcp.tool_audit_http_context import ToolAuditCallerMiddleware
 from sdocs_mcp.ui_nav import inject_subpage
-from sdocs_mcp.ui_paths import normalize_ui_base_path
+from sdocs_mcp.ui_paths import (
+    normalize_ui_base_path,
+    normalize_ui_pages_prefix,
+    ui_pages_base,
+)
 
 # Безопасный список: только чтение / диагностика + статус (без произвольного SQL и т.д.).
 _INVOKE_ALLOWLIST: dict[str, dict[str, Any] | None] = {
@@ -59,6 +65,7 @@ _INVOKE_ALLOWLIST: dict[str, dict[str, Any] | None] = {
 }
 
 UI_BASE = normalize_ui_base_path()
+UI_PAGES = normalize_ui_pages_prefix()
 
 # Встроенный MCP: lifespan sub-app Starlette при mount() не вызывается — держим session_manager здесь.
 _embedded_mcp: FastMCP | None = None
@@ -82,8 +89,9 @@ async def _app_lifespan(_application: FastAPI):
         stop_prometheus_metrics_cron()
 
 
-app = FastAPI(title="SDocsMCP UI", version="0.6.6", lifespan=_app_lifespan)
+app = FastAPI(title="SDocsMCP UI", version="0.6.7", lifespan=_app_lifespan)
 web_router = APIRouter()
+pages_router = APIRouter()
 
 install_access_logging(app, load_config().logging)
 
@@ -372,8 +380,13 @@ def _build_dashboard_stats(cfg: AppConfig) -> dict[str, Any]:
         "data_sources_note": (
             "Факт: health и latency — прямые проверки UI к модулям из конфига; "
             "обращения — HTTP к MCP (Streamable HTTP / SSE), не /api/* UI. "
-            "Gateway /mcp/*, Nacos, Jira в этой сборке не агрегируются — подключите в проде по описанию заказчика."
+            "Углы «сэкономлено» — расчётная модель (не биллинг и не учёт тикетов)."
         ),
+        "roi_model": {
+            "is_illustrative": True,
+            "formula_short": "(ручное_время − MCP) × инциденты/мес × 1.15 × доля_аптайма модулей",
+            "scales_with_period_buttons": True,
+        },
         "summary": {
             "mcp_enabled_count": enabled_cnt,
             "mcp_healthy_count": healthy_cnt,
@@ -613,19 +626,92 @@ async def ready() -> JSONResponse:
     return JSONResponse({"status": "ready"})
 
 
-@web_router.get("/", response_class=HTMLResponse)
+def _mcp_http_path() -> str:
+    p = f"{UI_BASE}/mcp" if UI_BASE else "/mcp"
+    return p.rstrip("/") + "/"
+
+
+def _root_landing_html() -> str:
+    mcp = _mcp_http_path()
+    console = ui_pages_base()
+    return f"""<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SDocsMCP</title>
+  <style>
+    body {{ font-family: system-ui, sans-serif; max-width: 42rem; margin: 2.5rem auto; padding: 0 1rem; line-height: 1.5; color: #e8e6e3; background: #0f1419; }}
+    h1 {{ font-size: 1.15rem; font-weight: 600; }}
+    a {{ color: #e8c07d; }}
+    code {{ font-size: 0.9em; }}
+    p.muted {{ color: #9aa5b5; font-size: 0.9rem; }}
+  </style>
+</head>
+<body>
+  <h1>SDocsMCP — MCP data-plane</h1>
+  <p>Для агентов (Cursor и др.): подключение Streamable HTTP MCP — <a href="{mcp}"><code>{mcp}</code></a>.</p>
+  <p>Сначала вызовите tools <code>sdocs_mcp_status</code> и <code>sdocs_mcp_capabilities</code> — не открывайте HTML-страницы вместо MCP.</p>
+  <p class="muted">Веб-консоль для людей: <a href="{console}/">{console}/</a></p>
+</body>
+</html>"""
+
+
+@pages_router.get("/", response_class=HTMLResponse)
 async def index() -> str:
     return DASHBOARD_HTML
 
 
-@web_router.get("/dashboard", response_class=HTMLResponse)
+@pages_router.get("/dashboard", response_class=HTMLResponse)
 async def executive_dashboard() -> str:
     return DASHBOARD_HTML
 
 
-@web_router.get("/ops", response_class=HTMLResponse)
+@pages_router.get("/ops", response_class=HTMLResponse)
 async def ops_console() -> str:
     return _OPS_HTML
+
+
+@pages_router.get("/cron-page", response_class=HTMLResponse)
+async def cron_page() -> str:
+    return CRON_PAGE_HTML
+
+
+@pages_router.get("/alerts-page", response_class=HTMLResponse)
+async def alerts_page() -> str:
+    return ALERTS_PAGE_HTML
+
+
+if UI_PAGES:
+
+    @web_router.get("/", response_class=HTMLResponse)
+    async def root_landing() -> str:
+        return _root_landing_html()
+
+    def _redirect_to_pages(subpath: str) -> RedirectResponse:
+        base = ui_pages_base()
+        url = f"{base}{subpath}" if subpath.startswith("/") else f"{base}/{subpath}"
+        return RedirectResponse(url=url, status_code=302)
+
+    @web_router.get("/dashboard")
+    async def legacy_dashboard() -> RedirectResponse:
+        return _redirect_to_pages("/dashboard")
+
+    @web_router.get("/ops")
+    async def legacy_ops() -> RedirectResponse:
+        return _redirect_to_pages("/ops")
+
+    @web_router.get("/cron-page")
+    async def legacy_cron_page() -> RedirectResponse:
+        return _redirect_to_pages("/cron-page")
+
+    @web_router.get("/alerts-page")
+    async def legacy_alerts_page() -> RedirectResponse:
+        return _redirect_to_pages("/alerts-page")
+
+    @web_router.get("/status-page")
+    async def legacy_status_page() -> RedirectResponse:
+        return _redirect_to_pages("/status-page")
 
 
 @web_router.post("/api/mail/test-send")
@@ -1000,7 +1086,7 @@ async def api_seed(req: Request) -> JSONResponse:
         _record_request_timing(started, ok)
 
 
-@web_router.get("/status-page", response_class=HTMLResponse)
+@pages_router.get("/status-page", response_class=HTMLResponse)
 async def status_page() -> str:
     return _STATUS_HTML
 
@@ -1079,6 +1165,7 @@ async def api_postgres_allowlist(req: Request) -> JSONResponse:
 
 
 app.include_router(web_router, prefix=UI_BASE)
+app.include_router(pages_router, prefix=ui_pages_base() if UI_PAGES else UI_BASE)
 
 
 def _embed_sdocs_mcp_if_enabled() -> None:
@@ -1353,7 +1440,6 @@ _OPS_HTML_RAW = """<!DOCTYPE html>
       <button type="button" role="tab" id="tab-services" aria-selected="true" aria-controls="panel-services">Сервисы</button>
       <button type="button" role="tab" id="tab-observe" aria-selected="false" aria-controls="panel-observe" tabindex="-1">Наблюдение</button>
       <button type="button" role="tab" id="tab-mcp" aria-selected="false" aria-controls="panel-mcp" tabindex="-1">MCP и отладка</button>
-      <button type="button" role="tab" id="tab-cron" aria-selected="false" aria-controls="panel-cron" tabindex="-1">Cron</button>
     </div>
 
     <div id="panel-services" role="tabpanel" aria-labelledby="tab-services">
@@ -1370,7 +1456,7 @@ _OPS_HTML_RAW = """<!DOCTYPE html>
       <p class="section-note"><strong>kafka_queue</strong> — оценка объёма сообщений по allowlist (не замена мониторинга кластера). <strong>ui_rate_limiter</strong> — нагрузка на <code>/api/*</code>, не статус брокеров или БД.</p>
       <div class="row" id="status-aux"></div>
       <h2 class="section-title" style="margin-top:1.25rem;">Статус и /metrics</h2>
-      <p class="section-note">Ниже — <strong>метрики самого SDocsMCP</strong> (<code>/metrics</code>). Запросы к вашему Prometheus — tools <code>prometheus_*</code> и вкладка <strong>Cron</strong>. Справка: <code>prometheus_mcp_guide</code>.</p>
+      <p class="section-note">Ниже — <strong>метрики самого SDocsMCP</strong> (<code>/metrics</code>). Запросы к Prometheus — tools <code>prometheus_*</code> и страница <a href="{{UI_PAGES_BASE}}/cron-page" style="color:var(--accent);">Cron</a>.</p>
       <div class="btn-row" style="margin-bottom:0.5rem;">
         <button type="button" id="btn-metrics">Обновить превью экспозиции /metrics</button>
       </div>
@@ -1395,36 +1481,6 @@ _OPS_HTML_RAW = """<!DOCTYPE html>
       <pre id="invoke-out" aria-labelledby="invoke-label">—</pre>
     </div>
 
-    <div id="panel-cron" role="tabpanel" aria-labelledby="tab-cron" hidden>
-      <h2 class="section-title">Prometheus → Kafka</h2>
-      <p class="section-note">Фоновый instant query в топик <code>kafka_metrics_topic</code> (по умолчанию <code>sdocs.prometheus.metrics</code>). Нужны Prometheus, Kafka <code>allow_produce</code> и топик в allowlist. Справка MCP: <code>prometheus_mcp_guide</code>.</p>
-      <p id="cron-alert" class="alert" role="alert" hidden></p>
-      <div id="cron-status-box" class="panel" style="margin-bottom:0.75rem;padding:0.85rem;">Загрузка…</div>
-      <form class="cron-form" id="cron-form" onsubmit="return false;">
-        <label><input type="checkbox" id="cron-enabled" checked /> Включено</label>
-        <div>
-          <label for="cron-interval">Интервал</label>
-          <div class="cron-row">
-            <select id="cron-interval">
-              <option value="30">30 сек</option>
-              <option value="60" selected>1 мин</option>
-              <option value="120">2 мин</option>
-              <option value="300">5 мин</option>
-              <option value="custom">Свой (мин)</option>
-            </select>
-            <input type="number" id="cron-interval-custom" min="1" max="1440" placeholder="мин" hidden style="width:5rem;" />
-          </div>
-        </div>
-        <div>
-          <label for="cron-query">PromQL</label>
-          <input type="text" id="cron-query" value="up" style="width:min(100%,28rem);" />
-        </div>
-        <div class="btn-row">
-          <button type="button" class="primary" id="btn-cron-save">Сохранить</button>
-          <button type="button" id="btn-cron-refresh">Обновить статус</button>
-        </div>
-      </form>
-    </div>
   </div>
   </div>
   </div>
@@ -1571,7 +1627,7 @@ _OPS_HTML_RAW = """<!DOCTYPE html>
       }
     }
     const allowed = [
-      'sdocs_mcp_status','redis_ping','redis_info','redis_dbsize','postgres_connections_overview','postgres_database_sizes',
+      'sdocs_mcp_status','sdocs_mcp_capabilities','redis_ping','redis_info','redis_dbsize','postgres_connections_overview','postgres_database_sizes',
       'postgres_table_sizes','opensearch_cluster_health','opensearch_rag_policy','opensearch_list_indices','kafka_list_topics',
       'kafka_describe_topic','kafka_consume_recent'
     ];
@@ -1585,81 +1641,6 @@ _OPS_HTML_RAW = """<!DOCTYPE html>
         b.onclick = () => invoke(n);
         host.appendChild(b);
       });
-    }
-    function fmtTs(ts) {
-      if (!ts) return '—';
-      try { return new Date(ts * 1000).toLocaleString(); } catch (e) { return String(ts); }
-    }
-    function cronIntervalSeconds() {
-      const sel = $('cron-interval').value;
-      if (sel === 'custom') {
-        const m = parseInt($('cron-interval-custom').value, 10);
-        return (m > 0 ? m : 1) * 60;
-      }
-      return parseInt(sel, 10) || 60;
-    }
-    function setCronIntervalUi(sec) {
-      const presets = ['30', '60', '120', '300'];
-      const s = String(sec);
-      if (presets.includes(s)) {
-        $('cron-interval').value = s;
-        $('cron-interval-custom').hidden = true;
-      } else {
-        $('cron-interval').value = 'custom';
-        $('cron-interval-custom').hidden = false;
-        $('cron-interval-custom').value = String(Math.max(1, Math.round(sec / 60)));
-      }
-    }
-    function renderCronStatus(s) {
-      const box = $('cron-status-box');
-      const alert = $('cron-alert');
-      alert.hidden = true;
-      alert.textContent = '';
-      if (!s.configured) {
-        alert.hidden = false;
-        alert.textContent = s.ready_reason || 'MCP Prometheus не настроен.';
-      } else if (s.ui_workers > 1) {
-        alert.hidden = false;
-        alert.className = 'alert warn';
-        alert.textContent = 'Внимание: SDOCS_MCP_UI_WORKERS=' + s.ui_workers
-          + ' — возможны дубли в Kafka. Лучше workers=1.';
-      } else {
-        alert.className = 'alert';
-      }
-      let stateLabel = 'выключено';
-      if (s.running) stateLabel = 'тик выполняется…';
-      else if (s.active) stateLabel = 'работает';
-      else if (s.enabled && !s.configured) stateLabel = 'включён, но не настроен';
-      const lines = [
-        'Состояние: ' + stateLabel,
-        'Prometheus: ' + (s.prometheus_base_url || '—'),
-        'Топик Kafka: ' + (s.kafka_topic || '—'),
-        'Интервал: ' + s.interval_seconds + ' с (тик до ~' + (s.tick_budget_hint_seconds || 65) + ' с)',
-        'PromQL: ' + s.query,
-        'Последний запуск: ' + fmtTs(s.last_run_at),
-        'Последний успех: ' + fmtTs(s.last_success_at),
-        'Запусков: ' + s.runs_total + ' (успехов ' + s.successes_total + ', пропусков ' + s.skips_total + ')',
-        s.last_skip_reason ? ('Последний пропуск: ' + s.last_skip_reason) : '',
-        s.last_error ? ('Последняя ошибка: ' + s.last_error) : '',
-        s.mcp_tools_hint || ''
-      ].filter(Boolean);
-      box.innerHTML = '<p class="muted" style="margin:0;">' + lines.map(l => l.replace(/</g, '&lt;')).join('<br>') + '</p>';
-      $('cron-enabled').checked = !!s.enabled;
-      setCronIntervalUi(s.interval_seconds);
-      $('cron-query').value = s.query || 'up';
-    }
-    async function loadCronStatus() {
-      const s = await jget('/api/prometheus-metrics-cron');
-      renderCronStatus(s);
-    }
-    async function saveCron() {
-      const body = {
-        enabled: $('cron-enabled').checked,
-        interval_seconds: cronIntervalSeconds(),
-        query: ($('cron-query').value || '').trim() || 'up'
-      };
-      const s = await jpost('/api/prometheus-metrics-cron', body);
-      renderCronStatus(s);
     }
     async function boot() {
       const saved = localStorage.getItem('sdocs_mcp_ui_token') || '';
@@ -1697,12 +1678,6 @@ _OPS_HTML_RAW = """<!DOCTYPE html>
       $('btn-seed').onclick = () => seed().catch(e => { $('invoke-out').textContent = 'Ошибка: ' + e; });
       $('btn-mail-test').onclick = () => mailTest().catch(e => { $('invoke-out').textContent = 'Ошибка: ' + e; });
       $('btn-metrics').onclick = () => refreshMetricsPreview().catch(e => { $('metrics-preview').textContent = String(e); });
-      $('cron-interval').onchange = () => {
-        $('cron-interval-custom').hidden = $('cron-interval').value !== 'custom';
-      };
-      $('btn-cron-save').onclick = () => saveCron().catch(e => alert(e));
-      $('btn-cron-refresh').onclick = () => loadCronStatus().catch(e => alert(e));
-      await loadCronStatus().catch(() => {});
       await refreshStatus().catch(e => {
         const err = $('status-error');
         err.hidden = false;
@@ -1710,14 +1685,6 @@ _OPS_HTML_RAW = """<!DOCTYPE html>
       });
       await refreshMetricsPreview().catch(e => { $('metrics-preview').textContent = String(e); });
     }
-    (function () {
-      const tt = document.getElementById('themeToggle');
-      if (!tt) return;
-      tt.addEventListener('click', function () { document.body.classList.toggle('light'); });
-      tt.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); document.body.classList.toggle('light'); }
-      });
-    })();
     boot();
   </script>
 </body>

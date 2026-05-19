@@ -1,6 +1,6 @@
 """Статическая разметка главного дашборда (стиль заказчика); данные — через GET /api/dashboard-stats."""
 
-from sdocs_mcp.ui_nav import inject_top_nav
+from sdocs_mcp.ui_nav import SUBPAGE_SKIN_STYLES, inject_subpage
 from sdocs_mcp.ui_paths import normalize_ui_base_path
 
 _DASHBOARD_HTML_RAW = """<!DOCTYPE html>
@@ -12,47 +12,20 @@ _DASHBOARD_HTML_RAW = """<!DOCTYPE html>
   <script>const __UI_BASE="{{UI_BASE_PATH}}";</script>
   <style>
 {{TOPNAV_STYLES}}
-    nav.sdocs-mcp-topnav { border-color: var(--border-light); background: var(--bg-card-light); }
-    nav.sdocs-mcp-topnav a:not(.is-active) { color: var(--accent-green); }
-    nav.sdocs-mcp-topnav a.is-active { color: var(--text-primary); }
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+{{SUBPAGE_SKIN}}
     :root {
-      --bg-primary: #020304;
-      --bg-card: #080b10;
-      --bg-card-light: #0D0F16;
-      --border-color: #171b23;
-      --border-light: #1A1E28;
-      --text-primary: #eef3ff;
-      --text-secondary: #8D99AB;
-      --text-muted: #5A6675;
-      --accent-green: #10b981;
-      --accent-gold: #f0b90b;
-      --accent-green-glow: #10b98130;
-      --legend-bg: #05080E;
-      --legend-header: #0A0D14;
+      --legend-bg: rgba(18, 24, 38, 0.55);
+      --legend-header: rgba(232, 192, 125, 0.1);
+      --border-color: var(--border);
+      --border-light: var(--border);
+      --text-secondary: var(--text-muted);
+      --accent-green: var(--success);
+      --accent-gold: var(--accent);
+      --accent-green-glow: rgba(232, 192, 125, 0.25);
+      --bg-card: var(--card-bg);
+      --bg-card-light: var(--surface2);
     }
-    body.light {
-      --bg-primary: #f5f7fc;
-      --bg-card: #ffffff;
-      --bg-card-light: #f8f9fe;
-      --border-color: #e2e8f0;
-      --border-light: #e2edf2;
-      --text-primary: #1a202c;
-      --text-secondary: #4a5568;
-      --text-muted: #718096;
-      --accent-green: #059669;
-      --accent-gold: #b45309;
-      --accent-green-glow: #05966920;
-      --legend-bg: #f1f5f9;
-      --legend-header: #e2e8f0;
-    }
-    body {
-      background: var(--bg-primary);
-      font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      color: var(--text-primary);
-      padding: 32px 40px;
-      transition: background 0.2s, color 0.2s;
-    }
+    .brand h1 { border: none; text-transform: none; }
     .mono { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; }
     .dashboard { max-width: 1600px; margin: 0 auto; }
     .luxury-header {
@@ -63,11 +36,8 @@ _DASHBOARD_HTML_RAW = """<!DOCTYPE html>
     .brand h1 { font-size: 24px; font-weight: 500; letter-spacing: -0.3px; color: var(--text-primary); }
     .brand h1 span {
       font-family: ui-monospace, monospace; font-size: 12px;
-      background: color-mix(in srgb, var(--accent-green) 20%, transparent);
-      padding: 2px 10px; border-radius: 20px; color: var(--accent-green); margin-left: 12px;
-    }
-    @supports not (background: color-mix(in srgb, white 50%, black)) {
-      .brand h1 span { background: rgba(16, 185, 129, 0.15); }
+      background: var(--accent-dim);
+      padding: 2px 10px; border-radius: 20px; color: var(--accent); margin-left: 12px;
     }
     .savings-corner { text-align: right; }
     .savings-row { display: flex; align-items: baseline; gap: 20px; justify-content: flex-end; flex-wrap: wrap; }
@@ -78,23 +48,20 @@ _DASHBOARD_HTML_RAW = """<!DOCTYPE html>
     .savings-label { font-size: 10px; color: var(--text-secondary); letter-spacing: 0.2px; margin-top: 2px; }
     .savings-divider { width: 1px; height: 32px; background: var(--border-color); opacity: 0.4; }
     .grid-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-bottom: 36px; }
-    .card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 28px; overflow: hidden; }
+    .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; backdrop-filter: blur(10px); }
     .card-header-section {
-      padding: 20px 24px 8px 24px; border-bottom: 1px solid var(--border-color);
+      padding: 20px 24px 8px 24px; border-bottom: 1px solid var(--border);
       display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;
     }
     .card-title { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 16px; }
-    .period-control { display: flex; align-items: center; gap: 12px; background: var(--bg-card-light); padding: 5px 12px; border-radius: 40px; }
+    .period-control { display: flex; align-items: center; gap: 12px; background: var(--surface2); padding: 5px 12px; border-radius: 40px; }
     .period-btn {
-      background: none; border: none; color: var(--text-secondary); font-size: 12px;
+      background: none; border: none; color: var(--text-muted); font-size: 12px;
       padding: 4px 12px; border-radius: 30px; cursor: pointer; transition: 0.2s;
     }
-    .period-btn.active { background: color-mix(in srgb, var(--accent-green) 20%, transparent); color: var(--accent-green); }
-    @supports not (background: color-mix(in srgb, white 50%, black)) {
-      .period-btn.active { background: rgba(16, 185, 129, 0.15); }
-    }
+    .period-btn.active { background: var(--accent-dim); color: var(--accent); }
     .reset-btn {
-      background: var(--border-light); border: none; color: var(--text-primary);
+      background: transparent; border: 1px solid var(--border); color: var(--text-primary);
       padding: 5px 14px; border-radius: 30px; font-size: 11px; cursor: pointer;
       display: flex; align-items: center; gap: 6px;
     }
@@ -136,6 +103,7 @@ _DASHBOARD_HTML_RAW = """<!DOCTYPE html>
     .theme-switch .toggle-track .toggle-thumb { width: 14px; height: 14px; background: var(--text-primary); border-radius: 14px; position: absolute; top: 2px; left: 2px; transition: 0.2s; }
     body.light .theme-switch .toggle-track .toggle-thumb { left: 20px; }
     .src-banner { font-size: 11px; color: var(--text-muted); margin-top: 8px; max-width: 42rem; line-height: 1.45; }
+    .roi-tag { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); border: 1px solid var(--accent-dim); border-radius: 4px; padding: 0.05rem 0.35rem; vertical-align: middle; }
     @media (max-width: 1100px) { .grid-2col { grid-template-columns: 1fr; } body { padding: 20px; } }
   </style>
 </head>
@@ -152,12 +120,12 @@ _DASHBOARD_HTML_RAW = """<!DOCTYPE html>
       <div class="savings-row">
         <div class="savings-item">
           <span class="savings-hours" id="savedHoursDisplay">—</span>
-          <span class="savings-label">сэкономлено чел·часов (модель)</span>
+          <span class="savings-label">сэкономлено чел·часов <span class="roi-tag">модель</span></span>
         </div>
         <div class="savings-divider"></div>
         <div class="savings-item">
           <span class="savings-money" id="savedMoneyDisplay">—</span>
-          <span class="savings-label">экономия в деньгах (модель)</span>
+          <span class="savings-label">экономия в деньгах <span class="roi-tag">модель</span></span>
         </div>
         <div class="savings-divider"></div>
         <div class="savings-item">
@@ -225,9 +193,6 @@ _DASHBOARD_HTML_RAW = """<!DOCTYPE html>
 
   <div class="dashboard-footer">
     <div>2026 · sdocs-mcp · дашборд</div>
-    <div class="theme-switch" id="themeToggle" role="button" tabindex="0" aria-label="Тема">
-      <span>☀</span>
-      <div class="toggle-track"><div class="toggle-thumb"></div></div>
       <span>☾</span>
     </div>
   </div>
@@ -268,10 +233,22 @@ _DASHBOARD_HTML_RAW = """<!DOCTYPE html>
     return Math.floor(raw * hFactor);
   }
 
+  function formatCollectedAt(ts) {
+    if (!ts) return '';
+    try { return new Date(ts * 1000).toLocaleString(); } catch (e) { return ''; }
+  }
+
   function applyPayload(payload) {
     lastPayload = payload;
     const s = payload.summary || {};
-    $('srcNote').textContent = payload.data_sources_note || '';
+    const roi = payload.roi_model || {};
+    let note = payload.data_sources_note || '';
+    if (roi.is_illustrative) {
+      note += ' · ROI: ' + (roi.formula_short || 'модель, не факт') + '.';
+    }
+    const at = formatCollectedAt(payload.collected_at);
+    if (at) note += ' Обновлено: ' + at + '.';
+    $('srcNote').textContent = note;
     rubPerHour = (payload.business_defaults && payload.business_defaults.rub_per_hour) || 1875;
     $('rateDisplay').textContent = rubPerHour.toLocaleString('ru-RU') + ' ₽/ч';
     baseSavedHoursMonth = modelSavedHoursMonth(payload);
@@ -295,7 +272,9 @@ _DASHBOARD_HTML_RAW = """<!DOCTYPE html>
     $('savedHoursMetric').textContent = hrs.toLocaleString('ru-RU');
     $('savedHoursDisplay').textContent = hrs.toLocaleString('ru-RU');
     $('savedMoneyDisplay').textContent = formatMoneyRub(money);
-    $('periodNote').textContent = currentPeriod === 'day' ? 'за сутки (пропорция месяца)' : (currentPeriod === 'week' ? 'за 7 дней' : 'за 30 дней');
+    const b = (lastPayload && lastPayload.business_defaults) || {};
+    const baseNote = 'модель: ' + (b.incidents_month || '—') + ' инц/мес, uptime ' + ((lastPayload.summary || {}).uptime_score_pct ?? '—') + '%';
+    $('periodNote').textContent = (currentPeriod === 'day' ? 'за сутки (1/30 мес.)' : (currentPeriod === 'week' ? 'за 7 дней' : 'за 30 дней')) + ' · ' + baseNote;
   }
 
   function ledStatus(m) {
@@ -364,7 +343,7 @@ _DASHBOARD_HTML_RAW = """<!DOCTYPE html>
       if (!r.ok) throw new Error(txt);
       applyPayload(JSON.parse(txt));
     } catch (e) {
-      $('srcNote').textContent = 'Ошибка: ' + e + ' (нужен токен? введите на /ops и сохраните)';
+      $('srcNote').textContent = 'Ошибка: ' + e + ' (нужен токен? откройте Консоль в меню и сохраните)';
     }
   }
 
@@ -383,9 +362,6 @@ _DASHBOARD_HTML_RAW = """<!DOCTYPE html>
     });
     refresh();
   });
-  $('themeToggle').addEventListener('click', () => document.body.classList.toggle('light'));
-  $('themeToggle').addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); document.body.classList.toggle('light'); } });
-
   refresh();
   setInterval(refresh, 35000);
 })();
@@ -394,4 +370,13 @@ _DASHBOARD_HTML_RAW = """<!DOCTYPE html>
 </html>
 """
 
-DASHBOARD_HTML = inject_top_nav(_DASHBOARD_HTML_RAW.replace("{{UI_BASE_PATH}}", normalize_ui_base_path()), "dash")
+def _build_dashboard_html() -> str:
+    base = normalize_ui_base_path()
+    raw = (
+        _DASHBOARD_HTML_RAW.replace("{{SUBPAGE_SKIN}}", SUBPAGE_SKIN_STYLES)
+        .replace("{{UI_BASE_PATH}}", base)
+    )
+    return inject_subpage(raw, "dash")
+
+
+DASHBOARD_HTML = _build_dashboard_html()

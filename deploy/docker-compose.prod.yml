@@ -9,7 +9,7 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile
-    image: sdocs-mcp-ui:${SDOCS_MCP_IMAGE_TAG:-0.6.6}
+    image: sdocs-mcp-ui:${SDOCS_MCP_IMAGE_TAG:-0.6.7}
     restart: unless-stopped
     env_file:
       - .env
@@ -28,7 +28,7 @@ services:
         read_only: true
       - sdocs-mcp-data:/app/data
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8888/health"]
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8888/sdocs/health"]
       interval: 30s
       timeout: 5s
       retries: 3

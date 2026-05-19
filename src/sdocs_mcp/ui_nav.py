@@ -4,14 +4,16 @@ from __future__ import annotations
 
 from typing import Literal
 
-from sdocs_mcp.ui_paths import normalize_ui_base_path
+from sdocs_mcp.ui_paths import normalize_ui_base_path, ui_pages_base
 
-NavPage = Literal["dash", "ops", "status"]
+NavPage = Literal["dash", "ops", "status", "cron", "alerts"]
 
 _NAV_LINKS: tuple[tuple[NavPage, str, str], ...] = (
     ("dash", "/", "Дашборд"),
     ("ops", "/ops", "Консоль"),
     ("status", "/status-page", "Статус и /metrics"),
+    ("cron", "/cron-page", "Cron"),
+    ("alerts", "/alerts-page", "Alert"),
 )
 
 TOP_NAV_STYLES = """
@@ -95,8 +97,7 @@ def _esc(s: str) -> str:
 
 def inject_top_nav(html_fragment: str, current: NavPage) -> str:
     """Подставляет разметку навигации вместо маркера {{TOPNAV}} + добавляет стили {{TOPNAV_STYLES}} в <head>."""
-    base = normalize_ui_base_path()
-    out = html_fragment.replace("{{TOPNAV}}", render_top_nav(current, base))
+    out = html_fragment.replace("{{TOPNAV}}", render_top_nav(current, ui_pages_base()))
     out = out.replace("{{TOPNAV_STYLES}}", TOP_NAV_STYLES)
     return out
 
@@ -265,9 +266,9 @@ SUBPAGE_SKIN_STYLES = """
 
 def inject_subpage(html_fragment: str, current: NavPage) -> str:
     """Дашборд-скин + topnav для вспомогательных HTML-страниц ({{SUBPAGE_SKIN}}, {{TOPNAV}}, {{TOPNAV_STYLES}})."""
-    b = normalize_ui_base_path()
     out = (
         html_fragment.replace("{{SUBPAGE_SKIN}}", SUBPAGE_SKIN_STYLES)
-        .replace("{{UI_BASE_PATH}}", b)
+        .replace("{{UI_BASE_PATH}}", normalize_ui_base_path())
+        .replace("{{UI_PAGES_BASE}}", ui_pages_base())
     )
     return inject_top_nav(out, current)

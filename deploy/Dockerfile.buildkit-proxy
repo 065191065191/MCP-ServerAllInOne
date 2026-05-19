@@ -8,7 +8,7 @@
 # 2) Сборка:
 #    DOCKER_BUILDKIT=1 docker build \
 #      --secret id=build_proxy,src=build-proxy.url \
-#      -f deploy/Dockerfile.buildkit-proxy -t sdocs-mcp-ui:0.6.6 .
+#      -f deploy/Dockerfile.buildkit-proxy -t sdocs-mcp-ui:0.6.7 .
 #
 # Обычный Dockerfile без секретов: deploy/Dockerfile
 
@@ -67,6 +67,6 @@ ENV PYTHONUNBUFFERED=1 \
 EXPOSE 8888
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-    CMD curl -fsS http://127.0.0.1:8888/health || exit 1
+    CMD curl -fsS http://127.0.0.1:8888/sdocs/health || exit 1
 
 CMD ["sdocs-mcp-ui"]

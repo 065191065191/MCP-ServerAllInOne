@@ -5,6 +5,24 @@
 
 ## [Unreleased]
 
+## [0.6.7] — 2026-05-19
+
+### Добавлено
+
+- **Пути UI по умолчанию под `/sdocs`:** landing `/sdocs/`, MCP `/sdocs/mcp`, консоль `/sdocs/console/`; корень хоста `/` не занят. Переменные `SDOCS_MCP_UI_BASE_PATH`, `SDOCS_MCP_UI_PAGES_PREFIX`.
+- **MCP для агентов:** `sdocs_mcp_capabilities`, `mcp_agent_guide.py`, расширенные `instructions` и `sdocs_mcp_status` (`tools_total`, подсказки).
+- **Страницы UI:** отдельные **Cron** и **Alert**; общие пресеты интервалов (30 сек … 24 ч); сетка навигации дашборд | консоль | статус | cron | alert.
+
+### Изменено
+
+- **Cron / Alert:** форма в одну строку (включено · интервал · PromQL), подсказки PromQL; группы алертов — без таблицы с рамками, удобный JSON-редактор.
+- **Дашборд:** явная пометка ROI как **модель** (не факт), время обновления и параметры расчёта в подписи.
+- **Deploy:** healthcheck и пробы на `/sdocs/health`.
+
+### Исправлено
+
+- **Каталог tools OpenSearch** в `mcp_agent_guide`: `allow_write` вместо несуществующего `allow_delete_index`; срез списка tools совпадает с `server.py` (в т.ч. при `opensearch.enabled`).
+
 ## [0.6.6] — 2026-05-15
 
 ### Исправлено
