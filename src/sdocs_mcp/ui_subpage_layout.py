@@ -27,18 +27,31 @@ SUBPAGE_LAYOUT_CSS = """
     .alerts-grid {
       display: grid;
       gap: 1rem;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: 1fr;
       align-items: start;
     }
     .alerts-grid .panel { padding: 1rem 1.15rem; border: none; }
     .alerts-grid-full { grid-column: 1 / -1; }
-    @media (max-width: 900px) { .alerts-grid { grid-template-columns: 1fr; } }
-    .groups-editor textarea {
-      min-height: 11rem;
+    .groups-editor textarea#alert-groups {
+      display: block;
+      width: 100%;
+      max-width: 100%;
+      box-sizing: border-box;
+      min-height: 14rem;
       font-family: ui-monospace, Consolas, monospace;
-      font-size: 0.8rem;
-      line-height: 1.45;
+      font-size: 0.82rem;
+      line-height: 1.5;
       resize: vertical;
+      white-space: pre;
+      overflow-x: auto;
+      tab-size: 2;
+    }
+    #alert-rules-list {
+      width: 100%;
+      box-sizing: border-box;
+      max-height: 20rem;
+      white-space: pre-wrap;
+      word-break: break-word;
     }
     .cron-settings-row {
       display: flex;

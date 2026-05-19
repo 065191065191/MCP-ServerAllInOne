@@ -28,15 +28,11 @@ _ALERTS_BODY = f"""
     </section>
     <section class="panel groups-editor">
       <h3 class="section-title" style="margin-top:0;">Группы и рабочее время</h3>
-      <p class="section-note">Список получателей в JSON. Поля: <code>id</code>, <code>name</code>, <code>emails</code> (через запятую), <code>hours_msk</code> (например <code>08:00-18:00</code>).</p>
-      <textarea id="alert-groups" rows="12" spellcheck="false" placeholder='[
-  {{
-    "id": "support",
-    "name": "Сопровождение",
-    "emails": "oncall@example.com",
-    "hours_msk": "08:00-18:00"
-  }}
-]'></textarea>
+      <p class="section-note">Список получателей в JSON (по одному объекту на строку). Поля: <code>id</code>, <code>name</code>, <code>emails</code>, <code>hours_msk</code> (например <code>08:00-18:00</code>).</p>
+      <textarea id="alert-groups" rows="14" spellcheck="false" wrap="off"></textarea>
+      <motion class="btn-row" style="margin-top:0.5rem;">
+        <button type="button" id="btn-groups-format">Форматировать JSON</button>
+      </motion>
     </section>
     <section class="panel alerts-grid-full">
       <h3 class="section-title" style="margin-top:0;">Правило</h3>
@@ -90,6 +86,12 @@ _ALERTS_SCRIPT = r"""
     function parseGroups() {
       try { return JSON.parse($('alert-groups').value || '[]'); } catch (e) { throw new Error('Группы: невалидный JSON'); }
     }
+    function groupsToPrettyText(groups) {
+      return JSON.stringify(groups, null, 2);
+    }
+    function formatGroupsTextarea() {
+      $('alert-groups').value = groupsToPrettyText(parseGroups());
+    }
     function refreshGroupSelect() {
       const sel = $('rule-group');
       const groups = parseGroups();
@@ -108,6 +110,7 @@ _ALERTS_SCRIPT = r"""
     function saveAll() {
       const groups = parseGroups();
       localStorage.setItem(LS_GROUPS, JSON.stringify(groups));
+      $('alert-groups').value = groupsToPrettyText(groups);
       const rules = JSON.parse(localStorage.getItem(LS_RULES) || '[]');
       const entry = {
         name: $('rule-name').value.trim(),
@@ -126,7 +129,7 @@ _ALERTS_SCRIPT = r"""
       $('alert-save-msg').textContent = 'Сохранено в localStorage (' + new Date().toLocaleString() + ').';
     }
     function loadExample() {
-      $('alert-groups').value = JSON.stringify(EXAMPLE_GROUPS, null, 2);
+      $('alert-groups').value = groupsToPrettyText(EXAMPLE_GROUPS);
       localStorage.setItem(LS_RULES, JSON.stringify(EXAMPLE_RULES));
       $('rule-name').value = EXAMPLE_RULES[0].name;
       $('rule-source').value = EXAMPLE_RULES[0].source;
@@ -139,9 +142,16 @@ _ALERTS_SCRIPT = r"""
     }
     (function boot() {
       const g = localStorage.getItem(LS_GROUPS);
-      $('alert-groups').value = g || JSON.stringify(EXAMPLE_GROUPS, null, 2);
-      $('alert-groups').onchange = () => { try { refreshGroupSelect(); } catch (e) { alert(e); } };
-      $('btn-alert-save').onclick = () => { try { saveAll(); } catch (e) { alert(e); } };
+      if (g) {
+        try { $('alert-groups').value = groupsToPrettyText(JSON.parse(g)); } catch (e) { $('alert-groups').value = g; }
+      } else {
+        $('alert-groups').value = groupsToPrettyText(EXAMPLE_GROUPS);
+      }
+      $('alert-groups').addEventListener('blur', () => {
+        try { formatGroupsTextarea(); refreshGroupSelect(); } catch (_) { /* оставить как ввёл */ }
+      });
+      $('btn-groups-format').onclick = () => { try { formatGroupsTextarea(); refreshGroupSelect(); } catch (e) { alert(e); } };
+      $('btn-alert-save').onclick = () => { try { formatGroupsTextarea(); saveAll(); } catch (e) { alert(e); } };
       $('btn-alert-load-example').onclick = () => loadExample();
       refreshGroupSelect();
       renderRulesList();
