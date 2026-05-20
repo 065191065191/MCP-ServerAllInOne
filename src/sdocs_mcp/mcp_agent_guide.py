@@ -13,6 +13,7 @@ _TOOL_HINTS: dict[str, list[tuple[str, str]]] = {
     "core": [
         ("sdocs_mcp_status", "Какие модули enabled в конфиге (вызовите первым)."),
         ("sdocs_mcp_capabilities", "Этот путеводитель: все tools по модулям и сценарии."),
+        ("sdocs_alerting_status", "Alert: Kafka modules.alerting.kafka, лидер (не tools alerting_*)."),
     ],
     "postgres": [
         ("postgres_connections_overview", "Сессии по state."),

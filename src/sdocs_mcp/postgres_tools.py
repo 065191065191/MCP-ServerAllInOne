@@ -45,8 +45,7 @@ def _ensure_db_allowed(cfg: PostgresModuleConfig) -> None:
 def _connect(cfg: PostgresModuleConfig):
     _ensure_db_allowed(cfg)
     conn = psycopg.connect(make_postgres_conninfo(cfg), connect_timeout=10, row_factory=dict_row)
-    # SET не поддерживает bind-параметры ($1 / %s) — иначе «syntax error at or near "$1"».
-    ms = max(1000, min(cfg.statement_timeout_seconds * 1000, 120_000))
+    ms = max(1, int(cfg.statement_timeout_seconds)) * 1000
     with conn.cursor() as cur:
         cur.execute(sql.SQL("SET statement_timeout = {}").format(sql.Literal(ms)))
     return conn
@@ -91,7 +90,7 @@ def postgres_long_running_queries(cfg: PostgresModuleConfig) -> str:
            left(query, 200) AS query_preview
     FROM pg_stat_activity
     WHERE state <> 'idle'
-      AND query NOT ILIKE '%%pg_stat_activity%%'
+      AND query NOT ILIKE '%' || 'pg_stat_activity' || '%'
     ORDER BY query_start ASC NULLS LAST
     LIMIT %s;
     """

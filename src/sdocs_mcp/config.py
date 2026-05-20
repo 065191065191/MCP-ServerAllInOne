@@ -604,7 +604,7 @@ def config_path_for_display() -> dict[str, str | bool]:
 
 
 _KNOWN_MODULE_KEYS = frozenset(
-    {"postgres", "redis", "kafka", "prometheus", "mail", "opensearch", "ssh", "posgress"}
+    {"postgres", "redis", "kafka", "prometheus", "mail", "opensearch", "ssh", "alerting", "posgress"}
 )
 
 

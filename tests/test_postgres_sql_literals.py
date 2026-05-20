@@ -11,9 +11,9 @@ def test_schema_literals_render_as_string_constants() -> None:
     assert rendered == "WHERE n.nspname IN ('public', 'audit')"
 
 
-def test_long_running_queries_ilike_escapes_percent_for_psycopg() -> None:
+def test_long_running_queries_ilike_avoids_percent_placeholder() -> None:
     q = """
-      AND query NOT ILIKE '%%pg_stat_activity%%'
+      AND query NOT ILIKE '%' || 'pg_stat_activity' || '%'
     """
-    assert "%p" not in q.replace("%%", "")
-    assert "%%pg_stat_activity%%" in q
+    assert "%p" not in q
+    assert "pg_stat_activity" in q

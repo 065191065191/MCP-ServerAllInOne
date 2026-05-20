@@ -111,7 +111,7 @@ async def _app_lifespan(_application: FastAPI):
         stop_prometheus_metrics_cron()
 
 
-app = FastAPI(title="SDocsMCP UI", version="0.6.13", lifespan=_app_lifespan)
+app = FastAPI(title="SDocsMCP UI", version="0.6.14", lifespan=_app_lifespan)
 web_router = APIRouter()
 pages_router = APIRouter()
 

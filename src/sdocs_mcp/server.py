@@ -46,6 +46,8 @@ from sdocs_mcp.config import (
 )
 from sdocs_mcp.http_access_log import install_access_logging
 from sdocs_mcp.mcp_telemetry import wrap_mcp_http_app
+from sdocs_mcp.alerts_kafka_resolve import alerts_kafka_ready, resolve_alerts_kafka
+from sdocs_mcp.alerts_kafka_sync import is_alert_leader
 from sdocs_mcp.config_runtime import public_config_status, refresh_config_state_from_disk
 from sdocs_mcp.mcp_agent_guide import build_capabilities_payload, build_mcp_instructions, capabilities_json
 from sdocs_mcp.mtls import resolve_mcp_mtls_uvicorn_kwargs
@@ -580,6 +582,29 @@ def build_mcp(
                     "prometheus": resolve_client_mtls(app.modules.prometheus) is not None,
                     "opensearch": resolve_client_mtls(app.modules.opensearch) is not None,
                 },
+            },
+            indent=2,
+            ensure_ascii=False,
+        )
+
+    @mcp.tool()
+    def sdocs_alerting_status() -> str:
+        """Alert: отдельный Kafka (modules.alerting.kafka), лидер, готовность sync. Не tools alerting_*."""
+        try:
+            disk = load_config()
+        except Exception as e:
+            return json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False)
+        ready, kafka_src = alerts_kafka_ready(disk)
+        k, _ = resolve_alerts_kafka(disk)
+        return json.dumps(
+            {
+                "alerting_module_in_config": disk.modules.alerting.enabled,
+                "alerting_kafka_enabled": disk.modules.alerting.kafka.enabled,
+                "alerting_kafka_source": kafka_src,
+                "alerting_kafka_ready": ready,
+                "alerting_kafka_bootstrap": k.bootstrap_servers if k else [],
+                "this_pod_is_leader": is_alert_leader(),
+                "hint": "Правила Alert — UI /api/alerts/*; MCP tools alerting_* не существуют.",
             },
             indent=2,
             ensure_ascii=False,
