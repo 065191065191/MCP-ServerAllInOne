@@ -14,6 +14,7 @@ from kafka import KafkaConsumer, KafkaProducer
 
 from sdocs_mcp.alerts_evaluator import run_leader_evaluation_tick
 from sdocs_mcp.alerts_store import apply_payload, snapshot
+from sdocs_mcp.alerts_kafka_resolve import alerts_kafka_ready, resolve_alerts_kafka
 from sdocs_mcp.config import AppConfig, load_config
 from sdocs_mcp.config_runtime import refresh_config_state_from_disk
 from sdocs_mcp.kafka_topics import SDOCS_ALERTS_EVENTS, SDOCS_ALERTS_LOCK, SDOCS_ALERTS_RULES
@@ -32,25 +33,18 @@ _is_leader = False
 _leader_lock = threading.Lock()
 
 
-def _alerts_kafka_ready(cfg: AppConfig) -> bool:
-    k = cfg.modules.kafka
-    if not k.enabled or not k.allow_produce:
-        return False
-    for t in (SDOCS_ALERTS_RULES, SDOCS_ALERTS_EVENTS, SDOCS_ALERTS_LOCK):
-        if t not in k.topic_allowlist:
-            return False
-    return True
-
-
 def publish_rules_snapshot() -> bool:
     cfg = load_config()
-    if not _alerts_kafka_ready(cfg):
+    ready, _src = alerts_kafka_ready(cfg)
+    if not ready:
         return False
+    k, _ = resolve_alerts_kafka(cfg)
+    assert k is not None
     payload = snapshot()
     payload["source"] = _instance_id
     payload["type"] = "rules_sync"
     body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-    prod = KafkaProducer(**kafka_broker_client_config(cfg.modules.kafka))
+    prod = KafkaProducer(**kafka_broker_client_config(k))
     try:
         prod.send(SDOCS_ALERTS_RULES, value=body, key=b"rules")
         prod.flush(10)
@@ -63,12 +57,13 @@ def _rules_consumer_loop() -> None:
     while not _stop.is_set():
         try:
             cfg = load_config()
-            if not cfg.modules.kafka.enabled:
+            k, src = resolve_alerts_kafka(cfg)
+            if k is None:
                 time.sleep(5)
                 continue
             consumer = KafkaConsumer(
                 SDOCS_ALERTS_RULES,
-                **kafka_broker_client_config(cfg.modules.kafka),
+                **kafka_broker_client_config(k),
                 group_id="sdocs-mcp-alerts-rules",
                 auto_offset_reset="latest",
                 enable_auto_commit=True,
@@ -97,11 +92,14 @@ def _leader_loop() -> None:
     while not _stop.is_set():
         try:
             cfg = load_config()
-            if not _alerts_kafka_ready(cfg):
+            ready, src = alerts_kafka_ready(cfg)
+            if not ready:
                 time.sleep(10)
                 continue
+            k, _ = resolve_alerts_kafka(cfg)
+            assert k is not None
             consumer = KafkaConsumer(
-                **kafka_broker_client_config(cfg.modules.kafka),
+                **kafka_broker_client_config(k),
                 group_id="sdocs-mcp-alerts-leader",
                 enable_auto_commit=True,
                 consumer_timeout_ms=3000,
@@ -130,7 +128,9 @@ def _evaluator_tick(cfg: AppConfig) -> None:
     events = run_leader_evaluation_tick(cfg)
     if not events:
         return
-    prod = KafkaProducer(**kafka_broker_client_config(cfg.modules.kafka))
+    k, _ = resolve_alerts_kafka(cfg)
+    assert k is not None
+    prod = KafkaProducer(**kafka_broker_client_config(k))
     try:
         for ev in events:
             prod.send(
@@ -158,8 +158,11 @@ def start_alerts_kafka_sync() -> None:
     _threads.extend([t1, t2])
     t1.start()
     t2.start()
+    cfg = load_config()
+    _, src = resolve_alerts_kafka(cfg)
     _log.info(
-        "Alerts Kafka sync started (topics %s, %s, %s); instance=%s",
+        "Alerts Kafka sync started via %s (topics %s, %s, %s); instance=%s",
+        src,
         SDOCS_ALERTS_RULES,
         SDOCS_ALERTS_EVENTS,
         SDOCS_ALERTS_LOCK,

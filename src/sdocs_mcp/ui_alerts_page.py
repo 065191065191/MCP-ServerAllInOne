@@ -12,7 +12,7 @@ _RULE_INTERVAL_OPTS = render_interval_options(
 _ALERTS_BODY = f"""
   <header class="page-head">
     <h1>Alert — оповещения</h1>
-    <p class="lede">Проверки по MCP-источникам. Правила синхронизируются между подами через Kafka (<code>sdocs.alerts.*</code>).</p>
+    <p class="lede">Проверки по MCP-источникам. Синхронизация правил — через <code>modules.alerting.kafka</code> (отдельный кластер от <code>modules.kafka</code> / ms-eda).</p>
     <p id="config-load-banner" class="config-banner config-banner--unknown" role="status" aria-live="polite">Конфиг: …</p>
     <p id="alerts-leader" class="muted" aria-live="polite"></p>
     <p class="section-note">Bearer (если задан <code>SDOCS_MCP_UI_TOKEN</code>): <input id="token" type="password" placeholder="токен" autocomplete="off" style="max-width:16rem" /></p>

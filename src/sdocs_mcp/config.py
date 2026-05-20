@@ -427,6 +427,35 @@ class SshModuleConfig(BaseModel):
         return self
 
 
+class AlertingModuleConfig(BaseModel):
+    """
+    Alert между подами SDocsMCP.
+    Kafka для синхронизации правил может быть **отдельным кластером** от modules.kafka
+    (где ms-eda, Prometheus Cron и т.д.).
+    """
+
+    enabled: bool = False
+    kafka: KafkaModuleConfig = Field(
+        default_factory=lambda: KafkaModuleConfig(
+            enabled=False,
+            topic_allowlist=[],
+            allow_produce=True,
+        )
+    )
+
+    @model_validator(mode="after")
+    def _alerting_kafka_when_enabled(self) -> Self:
+        if not self.enabled:
+            return self
+        if not self.kafka.enabled:
+            return self
+        if not self.kafka.bootstrap_servers:
+            raise ValueError("modules.alerting.kafka: задайте bootstrap_servers при enabled=true")
+        if not self.kafka.topic_allowlist:
+            raise ValueError("modules.alerting.kafka.topic_allowlist must be non-empty when alerting.kafka enabled")
+        return self
+
+
 class AccessLogConfig(BaseModel):
     """Combined access log (формат nginx) в консоль и файл."""
 
@@ -438,6 +467,7 @@ class AccessLogConfig(BaseModel):
 class ModulesConfig(BaseModel):
     opensearch: OpenSearchModuleConfig = Field(default_factory=OpenSearchModuleConfig)
     kafka: KafkaModuleConfig = Field(default_factory=KafkaModuleConfig)
+    alerting: AlertingModuleConfig = Field(default_factory=AlertingModuleConfig)
     postgres: PostgresModuleConfig = Field(default_factory=PostgresModuleConfig)
     redis: RedisModuleConfig = Field(default_factory=RedisModuleConfig)
     prometheus: PrometheusModuleConfig = Field(default_factory=PrometheusModuleConfig)

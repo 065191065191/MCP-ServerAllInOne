@@ -25,22 +25,37 @@ modules:
     username: sdocs_mcp
     password: REPLACE_ME     # альтернатива: password_env: OPENSEARCH_PASSWORD (взять из ENV)
 
-  # ───── Kafka ────────────────────────────────────────────────────
-  # Зачем: чтение/публикация в разрешённые топики. Без topic_allowlist инструменты не работают.
+  # ───── Kafka (мониторинг) ───────────────────────────────────────
+  # ms-eda, Cron→Prometheus и т.д. НЕ обязана совпадать с Kafka для Alert ниже.
   kafka:
     enabled: false
     bootstrap_servers:
-      - kafka.internal:9092
-    security_protocol: SASL_PLAINTEXT    # либо SASL_SSL / PLAINTEXT по вашей шине
+      - kafka-monitored.internal:9092
+    security_protocol: SASL_PLAINTEXT
     sasl_mechanism: SCRAM-SHA-512
     sasl_username: sdocs_mcp
     sasl_password: REPLACE_ME
     topic_allowlist:
+      - ms-eda
       - sdocs.prometheus.metrics
-      - sdocs.alerts.rules
-      - sdocs.alerts.events
-      - sdocs.alerts.lock
-    allow_produce: true                   # для Cron, Alert sync и событий
+    allow_produce: true
+
+  # ───── Alerting (свой Kafka для синхронизации правил между подами) ─
+  alerting:
+    enabled: true
+    kafka:
+      enabled: true
+      bootstrap_servers:
+        - kafka-alerts.internal:9092
+      security_protocol: SASL_SSL
+      sasl_mechanism: SCRAM-SHA-512
+      sasl_username: sdocs_mcp
+      sasl_password: REPLACE_ME
+      topic_allowlist:
+        - sdocs.alerts.rules
+        - sdocs.alerts.events
+        - sdocs.alerts.lock
+      allow_produce: true
 
   # ───── PostgreSQL ───────────────────────────────────────────────
   # Зачем: диагностика и разрешённые SELECT-ы по allowlisted_queries.

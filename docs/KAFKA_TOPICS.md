@@ -1,6 +1,15 @@
 # Топики Kafka для SDocsMCP
 
-Создайте в кластере и добавьте в `modules.kafka.topic_allowlist` (и `allow_produce: true` где нужна запись).
+## Два кластера (рекомендуется)
+
+| Секция конфига | Назначение |
+|----------------|------------|
+| **`modules.kafka`** | Мониторинг: `ms-eda`, Cron→`sdocs.prometheus.metrics`, tools `kafka_*` |
+| **`modules.alerting.kafka`** | Только Alert: синхронизация правил между подами SDocsMCP |
+
+Если `modules.alerting.kafka` не включён, Alert использует **`modules.kafka`** (как раньше).
+
+Создайте топики в **соответствующем** кластере и укажите их в `topic_allowlist` этой секции.
 
 | Топик | Partition (рекомендация) | Назначение |
 |-------|--------------------------|------------|

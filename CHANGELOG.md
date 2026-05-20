@@ -5,6 +5,18 @@
 
 ## [Unreleased]
 
+## [0.6.13] — 2026-05-20
+
+### Добавлено
+
+- **`modules.alerting.kafka`:** отдельный кластер Kafka для синхронизации Alert между подами (не `modules.kafka` с ms-eda / мониторингом).
+- Документация **`docs/OPENSEARCH_MCP.md`**: индексы, `query_json`, Alert-параметры.
+
+### Изменено
+
+- Alert sync: приоритет `modules.alerting.kafka`, иначе fallback на `modules.kafka`.
+- `GET /api/alerts/status` и `/api/kafka/topics-required` — поле `alerting_kafka_source`.
+
 ## [0.6.12] — 2026-05-20
 
 ### Исправлено

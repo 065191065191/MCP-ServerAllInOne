@@ -40,6 +40,7 @@ from sdocs_mcp.opensearch_tools import connect_opensearch
 from sdocs_mcp.postgres_tools import postgres_allowlisted_query_catalog
 from sdocs_mcp.redis_tools import redis_ping, redis_setex
 from sdocs_mcp.alerts_evaluator import rule_ui_statuses
+from sdocs_mcp.alerts_kafka_resolve import alerts_kafka_ready, resolve_alerts_kafka
 from sdocs_mcp.alerts_kafka_sync import is_alert_leader, publish_rules_snapshot, start_alerts_kafka_sync, stop_alerts_kafka_sync
 from sdocs_mcp.alerts_mcp_sources import list_sources
 from sdocs_mcp.alerts_store import save_from_ui, snapshot as alerts_snapshot
@@ -110,7 +111,7 @@ async def _app_lifespan(_application: FastAPI):
         stop_prometheus_metrics_cron()
 
 
-app = FastAPI(title="SDocsMCP UI", version="0.6.12", lifespan=_app_lifespan)
+app = FastAPI(title="SDocsMCP UI", version="0.6.13", lifespan=_app_lifespan)
 web_router = APIRouter()
 pages_router = APIRouter()
 
@@ -815,12 +816,21 @@ async def api_kafka_topics_required(req: Request) -> JSONResponse:
     ok = False
     try:
         _secure_api(req, "kafka_topics")
-        topics = [
-            {"name": t, "note": TOPIC_NOTES.get(t, "")}
-            for t in SDOCS_KAFKA_TOPICS_CREATE
-        ]
+        cfg = _cfg()
+        topics = [{"name": t, "note": TOPIC_NOTES.get(t, "")} for t in SDOCS_KAFKA_TOPICS_CREATE]
+        ready, kafka_src = alerts_kafka_ready(cfg)
         ok = True
-        return JSONResponse({"topics": topics, "allowlist_hint": "добавьте все имена в modules.kafka.topic_allowlist"})
+        return JSONResponse(
+            {
+                "topics": topics,
+                "alerting_kafka_source": kafka_src,
+                "alerting_kafka_ready": ready,
+                "allowlist_hint": (
+                    "Alert: modules.alerting.kafka.topic_allowlist (отдельный кластер). "
+                    "Мониторинг: modules.kafka.topic_allowlist (ms-eda, prometheus.metrics)."
+                ),
+            }
+        )
     finally:
         _record_request_timing(started, ok)
 
@@ -845,11 +855,14 @@ async def api_alerts_status(req: Request) -> JSONResponse:
     try:
         _secure_api(req, "alerts_status")
         cfg = _cfg()
+        ready, kafka_src = alerts_kafka_ready(cfg)
         ok = True
         return JSONResponse(
             {
                 "leader": is_alert_leader(),
                 "instance": (os.environ.get("HOSTNAME") or "").strip() or "local",
+                "alerting_kafka_source": kafka_src,
+                "alerting_kafka_ready": ready,
                 "rules": rule_ui_statuses(cfg),
                 "store_revision": alerts_snapshot().get("revision"),
             }
