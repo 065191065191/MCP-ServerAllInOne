@@ -45,9 +45,10 @@ def _ensure_db_allowed(cfg: PostgresModuleConfig) -> None:
 def _connect(cfg: PostgresModuleConfig):
     _ensure_db_allowed(cfg)
     conn = psycopg.connect(make_postgres_conninfo(cfg), connect_timeout=10, row_factory=dict_row)
+    # SET не поддерживает bind-параметры ($1 / %s) — иначе «syntax error at or near "$1"».
     ms = max(1000, min(cfg.statement_timeout_seconds * 1000, 120_000))
     with conn.cursor() as cur:
-        cur.execute("SET statement_timeout = %s", (ms,))
+        cur.execute(sql.SQL("SET statement_timeout = {}").format(sql.Literal(ms)))
     return conn
 
 

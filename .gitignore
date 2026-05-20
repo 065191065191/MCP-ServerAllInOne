@@ -11,6 +11,9 @@ build/
 # Архивы релиза (тяжёлые); сам каталог release/ и README в репозитории есть
 release/*.tar.gz
 release/*.zip
+release/*-patch-MANIFEST.txt
+release/*-patch-files.txt
+release/sdocs-mcp-*-files.txt
 .bundles/
 .pytest_cache/
 .ruff_cache/

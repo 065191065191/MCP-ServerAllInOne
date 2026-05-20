@@ -5,6 +5,12 @@
 
 ## [Unreleased]
 
+## [0.6.10] — 2026-05-20
+
+### Исправлено
+
+- **PostgreSQL MCP tools:** `SET statement_timeout` без bind-параметров — устранена ошибка `syntax error at or near "$1"` во всех `postgres_*` tools и `postgres_allowlisted_query`.
+
 ## [0.6.9] — 2026-05-20
 
 ### Добавлено
