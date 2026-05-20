@@ -68,3 +68,4 @@ def test_sdocs_mcp_status_tools_total_matches_list_tools() -> None:
     assert status["opensearch"] is True
     assert status["opensearch_rag"] is False
     assert "hint" in status
+    assert "config" in status and "path" in status["config"]

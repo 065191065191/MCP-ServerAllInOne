@@ -201,28 +201,10 @@ def build_capabilities_payload(app: AppConfig) -> dict[str, Any]:
     return {
         "server": "sdocs-mcp",
         "version": __version__,
-        "read_this_first": (
-            "SDocsMCP — модульный data-plane MCP. Tools регистрируются только для modules.*.enabled: true. "
-            "Не предполагайте Postgres/Kafka/Prometheus, пока не вызвали sdocs_mcp_status или этот tool."
-        ),
-        "session_start": [
-            "1. sdocs_mcp_status — флаги модулей в конфиге.",
-            "2. sdocs_mcp_capabilities — полный список tools (этот ответ).",
-            "3. Модульный guide при необходимости: prometheus_mcp_guide, opensearch_rag_policy, ssh_command_policy.",
-        ],
         "modules_enabled": enabled,
         "tools_total": len(flat),
         "tools_by_module": by_mod,
         "workflows": workflows,
-        "not_this_server": [
-            "HTTP GET /metrics на хосте UI — только внутренние счётчики SDocsMCP, не PromQL.",
-            "Сырой SQL в Postgres — только postgres_allowlisted_query(query_id) из каталога.",
-            "Kafka topic — только из kafka.topic_allowlist.",
-        ],
-        "ui_human_only": (
-            "HTML-консоль только для людей (по умолчанию /sdocs/console; MCP — /sdocs/mcp). "
-            "Агентам не открывать HTTP-страницы — используйте MCP tools."
-        ),
     }
 
 
@@ -232,16 +214,15 @@ def build_mcp_instructions(app: AppConfig) -> str:
     enabled_names = [k for k, v in cap["modules_enabled"].items() if v and k != "opensearch_rag"]
     if cap["modules_enabled"].get("opensearch_rag"):
         enabled_names.append("opensearch_rag")
-    mods = ", ".join(enabled_names) if enabled_names else "только core (все модули выключены в конфиге)"
+    mods = ", ".join(enabled_names) if enabled_names else "только core (см. modules_enabled в sdocs_mcp_capabilities)"
     return (
-        f"SDocsMCP v{__version__} — modular MCP (HTTP). "
-        f"В начале КАЖДОЙ новой задачи вызовите tools sdocs_mcp_status и sdocs_mcp_capabilities — "
-        f"не угадывайте состав tools. "
-        f"Сейчас в конфиге включены модули: {mods}. "
-        f"Всего tools для агента: {cap['tools_total']}. "
-        "PostgreSQL: фиксированная диагностика + postgres_allowlisted_query(query_id) без сырого SQL. "
-        "Prometheus: удалённый PromQL (prometheus_*), НЕ /metrics этого сервера — см. prometheus_mcp_guide. "
-        "Kafka: только topic_allowlist; produce нужен allow_produce. "
+        f"SDocsMCP v{__version__} — Streamable HTTP MCP. "
+        f"sdocs_mcp_capabilities — полный список tools; sdocs_mcp_status — флаги модулей и путь к конфигу. "
+        f"Модули в этом процессе: {mods}. "
+        f"Всего tools: {cap['tools_total']}. "
+        "PostgreSQL: диагностика + postgres_allowlisted_query(query_id). "
+        "Prometheus: prometheus_* к удалённому Prometheus; не путать с /metrics SDocsMCP — prometheus_mcp_guide. "
+        "Kafka: topic_allowlist; produce при allow_produce. "
         "OpenSearch RAG: opensearch_rag_policy перед записью. "
         "SSH: ssh_command_policy перед ssh_run_command."
     )

@@ -5,6 +5,24 @@
 
 ## [Unreleased]
 
+## [0.6.8] — 2026-05-20
+
+### Добавлено
+
+- **Поиск конфига без `SDOCS_MCP_CONFIG`:** по порядку читается первый существующий файл: `/config/app/mcp/mcp.conf`, `/config/app/mcp/config.yaml`, `/config/config.yaml`, затем `./config.yaml`.
+- **`sdocs_mcp_status`:** объект **`config`** (`path`, `file_found`, `source`) — чтобы сразу видеть, какой файл видит процесс MCP (диагностика «UI видит модули, MCP — нет»).
+- **YAML:** опечатка **`modules.posgress`** автоматически приводится к **`modules.postgres`**.
+
+### Изменено
+
+- **`sdocs_mcp_capabilities`:** убраны длинные пояснения, оставлены только факты: `modules_enabled`, `tools_by_module`, `workflows`.
+- **`instructions` MCP:** короче и без формулировок про «все модули выключены».
+- **Зависимости:** `mcp>=1.27.1`, `pydantic>=2.13`, `pydantic-settings>=2.7`, `fastapi>=0.136`, `uvicorn>=0.47`, явная зависимость `pydantic-settings` (используется FastMCP).
+
+### Изменено (операции)
+
+- **`GET /api/config-path`:** отдаёт фактический путь, `exists`, `source`, значение env `SDOCS_MCP_CONFIG` (может быть пустым).
+
 ## [0.6.7] — 2026-05-19
 
 ### Добавлено

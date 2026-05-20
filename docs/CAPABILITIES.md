@@ -10,7 +10,7 @@
 
 | Tool | Описание |
 |------|----------|
-| `sdocs_mcp_status` | JSON с флагами включённых модулей и `tools_total`. |
+| `sdocs_mcp_status` | JSON: флаги модулей, `tools_total`, путь к конфигу (`config`), mTLS. |
 | `sdocs_mcp_capabilities` | **Путеводитель для LLM:** все tools по модулям, сценарии, типичные ошибки — вызывать в начале сессии. |
 
 В `instructions` сервера MCP (поле server instructions в протоколе) также встроена краткая подсказка с тем же смыслом.

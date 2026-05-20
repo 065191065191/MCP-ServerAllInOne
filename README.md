@@ -187,6 +187,8 @@ sdocs-mcp
 
 **stdio по умолчанию отключён** без `SDOCS_MCP_DEV_LOCAL=true`.
 
+**Файл конфигурации (один для UI и встроенного MCP):** если **`SDOCS_MCP_CONFIG`** не задан, используется **первый существующий** из: `/config/app/mcp/mcp.conf`, `/config/app/mcp/config.yaml`, `/config/config.yaml`, иначе **`./config.yaml`** в рабочем каталоге процесса. Задайте **`SDOCS_MCP_CONFIG`**, если конфиг лежит в другом месте. В ответе tool **`sdocs_mcp_status`** поле **`config`** показывает, какой путь реально выбран (`path`, `file_found`, `source`).
+
 ---
 
 ## Конфигурация модулей (кратко)

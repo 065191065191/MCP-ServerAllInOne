@@ -26,7 +26,7 @@ from sdocs_mcp.backend_tls import (
     make_postgres_conninfo,
     prometheus_httpx_verify_and_cert,
 )
-from sdocs_mcp.config import AppConfig, load_config
+from sdocs_mcp.config import AppConfig, config_path_for_display, load_config
 from sdocs_mcp.executive_dashboard_html import DASHBOARD_HTML
 from sdocs_mcp.ui_alerts_page import ALERTS_PAGE_HTML
 from sdocs_mcp.ui_cron_page import CRON_PAGE_HTML
@@ -89,7 +89,7 @@ async def _app_lifespan(_application: FastAPI):
         stop_prometheus_metrics_cron()
 
 
-app = FastAPI(title="SDocsMCP UI", version="0.6.7", lifespan=_app_lifespan)
+app = FastAPI(title="SDocsMCP UI", version="0.6.8", lifespan=_app_lifespan)
 web_router = APIRouter()
 pages_router = APIRouter()
 
@@ -777,8 +777,16 @@ async def api_config_path(req: Request) -> JSONResponse:
     try:
         _secure_api(req, "config_path")
         p = os.environ.get("SDOCS_MCP_CONFIG", "")
+        meta = config_path_for_display()
         ok = True
-        return JSONResponse({"path": p, "exists": bool(p and os.path.isfile(p))})
+        return JSONResponse(
+            {
+                "path": meta["path"],
+                "exists": meta["file_found"],
+                "source": meta["source"],
+                "env_sdocs_mcp_config": p,
+            }
+        )
     finally:
         _record_request_timing(started, ok)
 
@@ -1663,7 +1671,7 @@ _OPS_HTML_RAW = """<!DOCTYPE html>
       }
       try {
         const c = await jget('/api/config-path');
-        $('cfgpath').textContent = 'Конфиг: SDOCS_MCP_CONFIG=' + (c.path || '(не задан)') + (c.exists ? ' — файл найден' : ' — файл не найден');
+        $('cfgpath').textContent = 'Конфиг: ' + (c.path || '(не найден)') + (c.exists ? ' — файл найден' : ' — файл не найден') + (c.source ? ' [' + c.source + ']' : '') + (c.env_sdocs_mcp_config ? ' (env SDOCS_MCP_CONFIG=' + c.env_sdocs_mcp_config + ')' : '');
       } catch (e) {
         $('cfgpath').textContent = 'Конфиг: ошибка — ' + e;
       }

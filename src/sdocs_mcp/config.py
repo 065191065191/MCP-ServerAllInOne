@@ -474,11 +474,61 @@ def _load_ssh_hosts_extra(path: Path) -> list[dict]:
     return []
 
 
+def _normalize_modules_keys(data: dict) -> dict:
+    """Исправление опечаток в YAML: modules.posgress → modules.postgres."""
+    mods = data.get("modules")
+    if not isinstance(mods, dict):
+        return data
+    if "posgress" in mods:
+        mist = mods.pop("posgress")
+        if "postgres" not in mods:
+            mods["postgres"] = mist
+        else:
+            pg = mods.get("postgres")
+            if isinstance(pg, dict) and isinstance(mist, dict):
+                mods["postgres"] = {**pg, **mist}
+            elif not pg:
+                mods["postgres"] = mist
+    return data
+
+
+# Порядок поиска, если SDOCS_MCP_CONFIG не задан (типичные mount в K8s).
+_DEFAULT_CONFIG_FILES: tuple[Path, ...] = (
+    Path("/config/app/mcp/mcp.conf"),
+    Path("/config/app/mcp/config.yaml"),
+    Path("/config/config.yaml"),
+)
+
+
+def resolve_config_path() -> tuple[Path | None, str]:
+    """
+    Путь к конфигу и метка источника (для логов, sdocs_mcp_status, /api/config-path).
+
+    Если задан SDOCS_MCP_CONFIG — всегда возвращаем этот путь (даже если файла нет).
+    Иначе первый существующий из _DEFAULT_CONFIG_FILES, затем ./config.yaml.
+    """
+    raw = (os.environ.get("SDOCS_MCP_CONFIG") or "").strip()
+    if raw:
+        return Path(raw), f"SDOCS_MCP_CONFIG={raw}"
+    for p in _DEFAULT_CONFIG_FILES:
+        if p.is_file():
+            return p, f"default:{p.as_posix()}"
+    cwd = Path.cwd() / "config.yaml"
+    if cwd.is_file():
+        return cwd, "cwd:config.yaml"
+    return None, "not_found"
+
+
+def config_path_for_display() -> dict[str, str | bool]:
+    path, source = resolve_config_path()
+    found = path is not None and path.is_file()
+    return {"path": str(path) if path else "", "file_found": found, "source": source}
+
+
 def load_config() -> AppConfig:
-    path_env = os.environ.get("SDOCS_MCP_CONFIG")
-    default_path = Path.cwd() / "config.yaml"
-    path = Path(path_env) if path_env else default_path
-    data = _load_yaml(path) if path.is_file() else {}
+    path, _src = resolve_config_path()
+    data = _load_yaml(path) if path and path.is_file() else {}
+    data = _normalize_modules_keys(data)
     extra_path = (os.environ.get("SDOCS_MCP_SSH_HOSTS_FILE") or "").strip()
     if extra_path:
         extra_hosts = _load_ssh_hosts_extra(Path(extra_path))

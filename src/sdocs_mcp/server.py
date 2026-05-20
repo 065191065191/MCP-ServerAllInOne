@@ -40,6 +40,7 @@ from sdocs_mcp.config import (
     PrometheusModuleConfig,
     RedisModuleConfig,
     SshModuleConfig,
+    config_path_for_display,
     load_config,
 )
 from sdocs_mcp.http_access_log import install_access_logging
@@ -521,7 +522,8 @@ def build_mcp(
             {
                 "stateless_http": mcp.settings.stateless_http,
                 "tools_total": cap["tools_total"],
-                "hint": "Полный каталог tools и сценарии: вызовите sdocs_mcp_capabilities",
+                "hint": "Каталог tools: sdocs_mcp_capabilities. Поле config — какой файл конфигурации видит этот процесс.",
+                "config": config_path_for_display(),
                 "postgres": app.modules.postgres.enabled,
                 "postgres_allowlisted_query_ids": (
                     [q.id for q in app.modules.postgres.allowlisted_queries]
