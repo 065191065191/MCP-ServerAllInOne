@@ -5,6 +5,19 @@
 
 ## [Unreleased]
 
+## [0.6.9] — 2026-05-20
+
+### Добавлено
+
+- **Конфиг для LLM/UI:** `config_runtime` + `config_load` в `sdocs_mcp_status` и `GET /api/config-load` — статус **ok / missing / invalid**, время загрузки **без пути к файлу**; при отсутствии файла явное «не загружен», при появлении Secret — «✓ загружен».
+- **Встроенный MCP:** `embedded_mcp.py` — ожидание конфига при старте (`SDOCS_MCP_CONFIG_WAIT_SECONDS`), пересборка tools при смене файла (`SDOCS_MCP_CONFIG_RELOAD_INTERVAL`).
+- **Alert + Kafka:** синхронизация правил между подами; лидер на топике `sdocs.alerts.lock` (1 partition); API `/api/alerts/*`; UI — выбор MCP-источника, cooldown, статусы серый/зелёный/красный.
+- **Топики Kafka:** `sdocs.prometheus.metrics`, `sdocs.alerts.rules`, `sdocs.alerts.events`, `sdocs.alerts.lock`; `GET /api/kafka/topics-required`.
+
+### Изменено
+
+- **Консоль UI:** статус конфига — зелёный OK + время, без отображения пути.
+
 ## [0.6.8] — 2026-05-20
 
 ### Добавлено

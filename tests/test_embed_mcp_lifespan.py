@@ -9,10 +9,12 @@ from starlette.testclient import TestClient
 def test_embed_mcp_initialize_no_task_group_error(monkeypatch: pytest.MonkeyPatch) -> None:
     """Встроенный MCP: session_manager.run() в lifespan FastAPI, не 500 Task group."""
     monkeypatch.setenv("SDOCS_MCP_EMBED_MCP", "true")
+    monkeypatch.setenv("SDOCS_MCP_CONFIG_WAIT_SECONDS", "0")
+    monkeypatch.setenv("SDOCS_MCP_CONFIG_RELOAD_INTERVAL", "0")
     import sdocs_mcp.info_app as ia
 
     importlib.reload(ia)
-    assert ia._embedded_mcp is not None
+    assert ia._embedded_mcp_holder is not None
     mcp_url = f"{ia.UI_BASE}/mcp/" if ia.UI_BASE else "/mcp/"
 
     with TestClient(ia.app) as client:

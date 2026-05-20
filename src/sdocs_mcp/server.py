@@ -41,10 +41,12 @@ from sdocs_mcp.config import (
     RedisModuleConfig,
     SshModuleConfig,
     config_path_for_display,
+    config_yaml_diagnose,
     load_config,
 )
 from sdocs_mcp.http_access_log import install_access_logging
 from sdocs_mcp.mcp_telemetry import wrap_mcp_http_app
+from sdocs_mcp.config_runtime import public_config_status, refresh_config_state_from_disk
 from sdocs_mcp.mcp_agent_guide import build_capabilities_payload, build_mcp_instructions, capabilities_json
 from sdocs_mcp.mtls import resolve_mcp_mtls_uvicorn_kwargs
 from sdocs_mcp.tool_audit_http_context import ToolAuditCallerMiddleware
@@ -514,32 +516,62 @@ def build_mcp(
         """Путеводитель для агента: все tools по модулям, сценарии, типичные ошибки. Вызовите в начале сессии вместе с sdocs_mcp_status."""
         return capabilities_json(app)
 
+    def _module_flags(cfg: AppConfig) -> dict[str, bool]:
+        m = cfg.modules
+        return {
+            "postgres": m.postgres.enabled,
+            "redis": m.redis.enabled,
+            "kafka": m.kafka.enabled,
+            "prometheus": m.prometheus.enabled,
+            "mail": m.mail.enabled,
+            "opensearch": m.opensearch.enabled,
+            "ssh": m.ssh.enabled,
+        }
+
     @mcp.tool()
     def sdocs_mcp_status() -> str:
         """Какие модули enabled в конфиге (без секретов). Для полного списка tools — sdocs_mcp_capabilities."""
         cap = build_capabilities_payload(app)
+        try:
+            refresh_config_state_from_disk()
+        except Exception:
+            pass
+        cfg_pub = public_config_status()
+        disk = load_config()
+        disk_flags = _module_flags(disk)
+        mcp_flags = _module_flags(app)
+        cap_disk = build_capabilities_payload(disk)
+        stale = disk_flags != mcp_flags
+        hint = "Каталог tools: sdocs_mcp_capabilities. config_load — статус YAML для LLM (без пути к файлу)."
+        if stale:
+            hint += " modules_active_in_mcp устарели — ждите reload или перезапуск пода."
         return json.dumps(
             {
                 "stateless_http": mcp.settings.stateless_http,
                 "tools_total": cap["tools_total"],
-                "hint": "Каталог tools: sdocs_mcp_capabilities. Поле config — какой файл конфигурации видит этот процесс.",
-                "config": config_path_for_display(),
-                "postgres": app.modules.postgres.enabled,
+                "tools_total_on_disk": cap_disk["tools_total"],
+                "mcp_stale_vs_disk": stale,
+                "hint": hint,
+                "config_load": cfg_pub,
+                "config_diagnose": config_yaml_diagnose(),
+                "modules_enabled_on_disk": disk_flags,
+                "modules_active_in_mcp": mcp_flags,
+                "postgres": mcp_flags["postgres"],
                 "postgres_allowlisted_query_ids": (
                     [q.id for q in app.modules.postgres.allowlisted_queries]
                     if app.modules.postgres.enabled
                     else []
                 ),
-                "redis": app.modules.redis.enabled,
-                "kafka": app.modules.kafka.enabled,
-                "prometheus": app.modules.prometheus.enabled,
-                "mail": app.modules.mail.enabled,
-                "opensearch": app.modules.opensearch.enabled,
+                "redis": mcp_flags["redis"],
+                "kafka": mcp_flags["kafka"],
+                "prometheus": mcp_flags["prometheus"],
+                "mail": mcp_flags["mail"],
+                "opensearch": mcp_flags["opensearch"],
                 "opensearch_rag": app.modules.opensearch.enabled and app.modules.opensearch.rag.enabled,
                 "opensearch_tool_call_audit": (
                     app.modules.opensearch.enabled and app.modules.opensearch.tool_call_audit.enabled
                 ),
-                "ssh": app.modules.ssh.enabled,
+                "ssh": mcp_flags["ssh"],
                 "mcp_http_mtls": resolve_mcp_mtls_uvicorn_kwargs() is not None,
                 "backend_mtls": {
                     "postgres": resolve_client_mtls(app.modules.postgres) is not None,

@@ -1,4 +1,4 @@
-"""Страница Alert: правила оповещений (UI, localStorage; рассылка через MCP mail)."""
+"""Страница Alert: правила, MCP-источники, синхронизация через Kafka."""
 
 from __future__ import annotations
 
@@ -12,149 +12,196 @@ _RULE_INTERVAL_OPTS = render_interval_options(
 _ALERTS_BODY = f"""
   <header class="page-head">
     <h1>Alert — оповещения</h1>
-    <p class="lede">Правила реагируют на данные (OpenSearch, Prometheus). Рассылка — через MCP <code>mail_smtp_send</code> на группы ниже.</p>
+    <p class="lede">Проверки по MCP-источникам. Правила синхронизируются между подами через Kafka (<code>sdocs.alerts.*</code>).</p>
+    <p id="config-load-banner" class="config-banner config-banner--unknown" role="status" aria-live="polite">Конфиг: …</p>
+    <p id="alerts-leader" class="muted" aria-live="polite"></p>
+    <p class="section-note">Bearer (если задан <code>SDOCS_MCP_UI_TOKEN</code>): <input id="token" type="password" placeholder="токен" autocomplete="off" style="max-width:16rem" /></p>
   </header>
   <div class="alerts-grid">
     <section class="panel">
-      <h3 class="section-title" style="margin-top:0;">Как добавлять алерты</h3>
-      <ul class="muted" style="margin:0;padding-left:1.1rem;line-height:1.55;">
-        <li>Опишите <strong>источник</strong>: индекс OpenSearch, запрос Prometheus и т.д.</li>
-        <li>Задайте <strong>условие</strong> (порог, окно времени).</li>
-        <li>Выберите <strong>группу</strong> с почтами и рабочим временем (МСК).</li>
-        <li>Укажите <strong>интервал</strong> проверки — не чаще, чем позволяет нагрузка на источник.</li>
-        <li>Сохраните правило; доставка — через MCP при срабатывании (модуль mail).</li>
-      </ul>
-      <p class="section-note" style="margin-top:0.85rem;">Сейчас настройки хранятся в браузере (localStorage). API сохранения на сервере — в следующих версиях.</p>
+      <h3 class="section-title" style="margin-top:0;">Источник (MCP)</h3>
+      <p class="section-note">Выберите модуль из доступных в конфиге. Серый — модуль выключен; зелёный — доступен; красный — ошибка обращения.</p>
+      <div class="form-grid">
+        <label>MCP-источник<select id="rule-mcp-source"></select></label>
+        <label>Параметры (индекс / query)<input type="text" id="rule-params" placeholder="index ms-logs; query level:ERROR AND message:*404*" /></label>
+        <label>Порог (шт.)<input type="number" id="rule-threshold" min="1" value="2" /></label>
+        <label>Окно (часов)<input type="number" id="rule-window-hours" min="1" value="1" /></label>
+        <label>Интервал проверки<select id="rule-interval" class="interval-select-wide">
+{_RULE_INTERVAL_OPTS}
+        </select></label>
+        <label>Cooldown (сек., анти-спам)<input type="number" id="rule-cooldown" min="60" value="3600" title="Не чаще одного письма за период" /></label>
+        <label>Группа<select id="rule-group"></select></label>
+      </div>
     </section>
     <section class="panel groups-editor">
-      <h3 class="section-title" style="margin-top:0;">Группы и рабочее время</h3>
-      <p class="section-note">Список получателей в JSON (по одному объекту на строку). Поля: <code>id</code>, <code>name</code>, <code>emails</code>, <code>hours_msk</code> (например <code>08:00-18:00</code>).</p>
-      <textarea id="alert-groups" rows="14" spellcheck="false" wrap="off"></textarea>
-      <motion class="btn-row" style="margin-top:0.5rem;">
-        <button type="button" id="btn-groups-format">Форматировать JSON</button>
-      </motion>
+      <h3 class="section-title" style="margin-top:0;">Группы</h3>
+      <textarea id="alert-groups" rows="10" spellcheck="false" wrap="off"></textarea>
+      <button type="button" id="btn-groups-format">Форматировать JSON</button>
     </section>
     <section class="panel alerts-grid-full">
       <h3 class="section-title" style="margin-top:0;">Правило</h3>
       <div class="form-grid">
-        <label>Название<input type="text" id="rule-name" placeholder="HTTP 500 в ms-logs" /></label>
-        <label>Источник (откуда брать данные)<input type="text" id="rule-source" placeholder="opensearch:index ms-logs | query: status:500" /></label>
-        <label>Условие / порог<input type="text" id="rule-condition" placeholder="count &gt;= 1 за 1ч; критично если &gt;= 10" /></label>
-        <label>Как часто проверять<select id="rule-interval" class="interval-select-wide">
-{_RULE_INTERVAL_OPTS}
-        </select></label>
-        <label>Группа рассылки<select id="rule-group"></select></label>
-        <label>Описание для письма<textarea id="rule-desc" rows="3" placeholder="Текст в уведомлении"></textarea></label>
-      </div>
-      <div class="example-box">
-        <strong>Пример:</strong> OpenSearch <code>ms-logs</code>, HTTP 500 за час: если ≥1 — алерт группе «Сопровождение» (08:00–18:00 МСК);
-        если ≥10 — дополнительно «Админы» (18:00–07:00 МСК). Проверка раз в час через MCP OpenSearch + mail.
+        <label>Название<input type="text" id="rule-name" placeholder="404 ERROR в ms-logs" /></label>
+        <label>Описание<textarea id="rule-desc" rows="2"></textarea></label>
       </div>
       <div class="btn-row">
-        <button type="button" class="primary" id="btn-alert-save">Сохранить в браузере</button>
-        <button type="button" id="btn-alert-load-example">Загрузить пример</button>
-      </motion>
-      <p class="muted" id="alert-save-msg" style="margin-top:0.5rem;"></p>
-      <h3 class="section-title">Сохранённые правила</h3>
-      <pre id="alert-rules-list">—</pre>
+        <button type="button" class="primary" id="btn-alert-save">Сохранить на сервер (+ Kafka)</button>
+        <button type="button" id="btn-alert-refresh">Обновить статусы</button>
+        <button type="button" id="btn-alert-load-example">Пример</button>
+      </div>
+      <p class="muted" id="alert-save-msg"></p>
+      <h3 class="section-title">Статус правил</h3>
+      <div id="alert-rules-status"></div>
     </section>
   </div>
-""".replace("</motion>", "</div>").replace("<motion", "<div")
+  <style>
+    .config-banner {{ padding: 0.5rem 0.75rem; border-radius: 6px; font-weight: 600; }}
+    .config-banner--ok {{ background: #0d3320; color: #6ee7a0; border: 1px solid #1a5c38; }}
+    .config-banner--missing {{ background: #3d3010; color: #fcd34d; border: 1px solid #854d0e; }}
+    .config-banner--invalid {{ background: #3f1515; color: #fca5a5; border: 1px solid #991b1b; }}
+    .rule-row {{ display:flex; gap:0.75rem; align-items:flex-start; padding:0.6rem 0; border-bottom:1px solid var(--border, #333); }}
+    .rule-dot {{ width:10px; height:10px; border-radius:50%; margin-top:0.35rem; flex-shrink:0; }}
+    .rule-inactive {{ background:#888; }}
+    .rule-ok {{ background:#22c55e; }}
+    .rule-error {{ background:#ef4444; }}
+    .rule-firing {{ background:#f59e0b; }}
+  </style>
+"""
 
 _ALERTS_SCRIPT = r"""
-    const LS_GROUPS = 'sdocs_mcp_alert_groups';
-    const LS_RULES = 'sdocs_mcp_alert_rules';
     const $ = (id) => document.getElementById(id);
-
-    const EXAMPLE_GROUPS = [
-      { id: 'support', name: 'Сопровождение', emails: 'oncall@example.com', hours_msk: '08:00-18:00' },
-      { id: 'admins', name: 'Админы', emails: 'admins@example.com', hours_msk: '18:00-07:00' }
-    ];
-    const EXAMPLE_RULES = [
-      {
-        name: 'HTTP 500 в ms-logs (час)',
-        source: 'opensearch:index ms-logs query status:500',
-        condition: 'count >= 1 per 1h; critical if count >= 10',
-        interval_sec: 3600,
-        group_id: 'support',
-        description: 'Ошибки 500 в ms-logs за последний час',
-        escalate_group_id: 'admins',
-        escalate_when: 'count >= 10'
-      }
-    ];
-
+    function authHeader() {
+      const t = ($('token') || {}).value ? $('token').value.trim() : '';
+      return t ? { 'Authorization': 'Bearer ' + t } : {};
+    }
+    async function jget(path) {
+      const r = await fetch(__UI_BASE + path, { headers: authHeader() });
+      if (!r.ok) throw new Error(await r.text());
+      return r.json();
+    }
+    async function jpost(path, body) {
+      const r = await fetch(__UI_BASE + path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeader() },
+        body: JSON.stringify(body || {}),
+      });
+      if (!r.ok) throw new Error(await r.text());
+      return r.json();
+    }
     function parseGroups() {
-      try { return JSON.parse($('alert-groups').value || '[]'); } catch (e) { throw new Error('Группы: невалидный JSON'); }
+      return JSON.parse($('alert-groups').value || '[]');
     }
-    function groupsToPrettyText(groups) {
-      return JSON.stringify(groups, null, 2);
-    }
-    function formatGroupsTextarea() {
-      $('alert-groups').value = groupsToPrettyText(parseGroups());
-    }
+    function groupsPretty(g) { return JSON.stringify(g, null, 2); }
     function refreshGroupSelect() {
       const sel = $('rule-group');
-      const groups = parseGroups();
       sel.innerHTML = '';
-      groups.forEach((g) => {
+      parseGroups().forEach((g) => {
         const o = document.createElement('option');
         o.value = g.id;
         o.textContent = (g.name || g.id) + ' (' + (g.hours_msk || '—') + ')';
         sel.appendChild(o);
       });
     }
-    function renderRulesList() {
-      const rules = JSON.parse(localStorage.getItem(LS_RULES) || '[]');
-      $('alert-rules-list').textContent = rules.length ? JSON.stringify(rules, null, 2) : '—';
+    async function loadConfigBanner() {
+      const el = $('config-load-banner');
+      try {
+        const c = await jget('/api/config-load');
+        el.className = 'config-banner config-banner--' + (c.state === 'ok' ? 'ok' : (c.state === 'invalid' ? 'invalid' : 'missing'));
+        const t = c.loaded_at ? (' · ' + c.loaded_at) : '';
+        el.textContent = (c.state === 'ok' ? '✓ Конфиг загружен' : (c.state === 'invalid' ? '✗ Ошибка конфига' : '○ Конфиг не загружен')) + t + ' — ' + (c.message || '');
+      } catch (e) {
+        el.className = 'config-banner config-banner--invalid';
+        el.textContent = '✗ Не удалось получить статус конфига';
+      }
     }
-    function saveAll() {
+    async function loadMcpSources() {
+      const data = await jget('/api/alerts/mcp-sources');
+      const sel = $('rule-mcp-source');
+      sel.innerHTML = '';
+      (data.sources || []).forEach((s) => {
+        const o = document.createElement('option');
+        o.value = s.id;
+        o.textContent = s.label + (s.enabled_in_config ? '' : ' (выкл. в конфиге)');
+        o.disabled = !s.enabled_in_config;
+        sel.appendChild(o);
+      });
+    }
+    function ruleRowHtml(r) {
+      const cls = { inactive: 'rule-inactive', ok: 'rule-ok', error: 'rule-error', firing: 'rule-firing' }[r.ui_state] || 'rule-inactive';
+      const h = r.health || {};
+      return '<div class="rule-row"><span class="rule-dot ' + cls + '"></span><div><strong>' + (r.name || '—') + '</strong> · ' +
+        (r.mcp_source || '') + '<br><span class="muted">' + (h.label || '') + ': ' + (h.detail || '') +
+        (r.evaluation && r.evaluation.detail ? ' · ' + r.evaluation.detail : '') + '</span></div></div>';
+    }
+    async function refreshStatuses() {
+      const st = await jget('/api/alerts/status');
+      $('alerts-leader').textContent = st.leader ? ('Лидер проверок: этот под (' + st.instance + ')') : ('Лидер: другой под · ' + st.instance);
+      $('alert-rules-status').innerHTML = (st.rules || []).length ? (st.rules || []).map(ruleRowHtml).join('') : '<p class="muted">Нет правил</p>';
+    }
+    async function saveAll() {
       const groups = parseGroups();
-      localStorage.setItem(LS_GROUPS, JSON.stringify(groups));
-      $('alert-groups').value = groupsToPrettyText(groups);
-      const rules = JSON.parse(localStorage.getItem(LS_RULES) || '[]');
+      const rules = JSON.parse(localStorage.getItem('sdocs_mcp_alert_rules') || '[]');
       const entry = {
         name: $('rule-name').value.trim(),
-        source: $('rule-source').value.trim(),
-        condition: $('rule-condition').value.trim(),
+        mcp_source: $('rule-mcp-source').value,
+        params: $('rule-params').value.trim(),
+        threshold: parseInt($('rule-threshold').value, 10),
+        window_hours: parseFloat($('rule-window-hours').value),
         interval_sec: parseInt($('rule-interval').value, 10),
+        cooldown_sec: parseInt($('rule-cooldown').value, 10),
         group_id: $('rule-group').value,
         description: $('rule-desc').value.trim(),
       };
-      if (!entry.name) throw new Error('Укажите название правила');
-      const idx = rules.findIndex((r) => r.name === entry.name);
-      if (idx >= 0) rules[idx] = entry; else rules.push(entry);
-      localStorage.setItem(LS_RULES, JSON.stringify(rules));
+      if (!entry.name) throw new Error('Укажите название');
+      let list = rules;
+      const idx = list.findIndex((x) => x.name === entry.name);
+      if (idx >= 0) list[idx] = { ...list[idx], ...entry }; else list.push(entry);
+      localStorage.setItem('sdocs_mcp_alert_rules', JSON.stringify(list));
+      const res = await jpost('/api/alerts/rules', { groups, rules: list });
+      $('alert-save-msg').textContent = 'Сохранено, revision=' + res.revision + (res.kafka_published ? ', Kafka OK' : ', Kafka пропущен (allowlist/produce)');
+      await refreshStatuses();
+    }
+    async function loadFromServer() {
+      const snap = await jget('/api/alerts/rules');
+      if (snap.groups) $('alert-groups').value = groupsPretty(snap.groups);
+      if (snap.rules) localStorage.setItem('sdocs_mcp_alert_rules', JSON.stringify(snap.rules));
       refreshGroupSelect();
-      renderRulesList();
-      $('alert-save-msg').textContent = 'Сохранено в localStorage (' + new Date().toLocaleString() + ').';
     }
     function loadExample() {
-      $('alert-groups').value = groupsToPrettyText(EXAMPLE_GROUPS);
-      localStorage.setItem(LS_RULES, JSON.stringify(EXAMPLE_RULES));
-      $('rule-name').value = EXAMPLE_RULES[0].name;
-      $('rule-source').value = EXAMPLE_RULES[0].source;
-      $('rule-condition').value = EXAMPLE_RULES[0].condition;
-      $('rule-interval').value = String(EXAMPLE_RULES[0].interval_sec);
-      $('rule-desc').value = EXAMPLE_RULES[0].description;
+      $('alert-groups').value = groupsPretty([
+        { id: 'support', name: 'Сопровождение', emails: 'oncall@example.com', hours_msk: '08:00-18:00' }
+      ]);
+      const rules = [{
+        name: '404 ERROR в ms-logs',
+        mcp_source: 'opensearch',
+        params: 'index ms-logs; query level:ERROR AND message:*404*',
+        threshold: 2, window_hours: 1, interval_sec: 3600, cooldown_sec: 3600,
+        group_id: 'support', description: 'Более 2 ERROR с 404 за час'
+      }];
+      localStorage.setItem('sdocs_mcp_alert_rules', JSON.stringify(rules));
+      const r = rules[0];
+      $('rule-name').value = r.name;
+      $('rule-mcp-source').value = r.mcp_source;
+      $('rule-params').value = r.params;
+      $('rule-threshold').value = r.threshold;
+      $('rule-window-hours').value = r.window_hours;
+      $('rule-interval').value = String(r.interval_sec);
+      $('rule-cooldown').value = String(r.cooldown_sec);
+      $('rule-desc').value = r.description;
       refreshGroupSelect();
-      $('rule-group').value = EXAMPLE_RULES[0].group_id;
-      renderRulesList();
+      $('rule-group').value = r.group_id;
     }
-    (function boot() {
-      const g = localStorage.getItem(LS_GROUPS);
-      if (g) {
-        try { $('alert-groups').value = groupsToPrettyText(JSON.parse(g)); } catch (e) { $('alert-groups').value = g; }
-      } else {
-        $('alert-groups').value = groupsToPrettyText(EXAMPLE_GROUPS);
-      }
-      $('alert-groups').addEventListener('blur', () => {
-        try { formatGroupsTextarea(); refreshGroupSelect(); } catch (_) { /* оставить как ввёл */ }
-      });
-      $('btn-groups-format').onclick = () => { try { formatGroupsTextarea(); refreshGroupSelect(); } catch (e) { alert(e); } };
-      $('btn-alert-save').onclick = () => { try { formatGroupsTextarea(); saveAll(); } catch (e) { alert(e); } };
+    (async function boot() {
+      try { await loadFromServer(); } catch (_) {}
+      $('btn-groups-format').onclick = () => { $('alert-groups').value = groupsPretty(parseGroups()); refreshGroupSelect(); };
+      $('btn-alert-save').onclick = () => saveAll().catch((e) => alert(e));
+      $('btn-alert-refresh').onclick = () => refreshStatuses().catch((e) => alert(e));
       $('btn-alert-load-example').onclick = () => loadExample();
-      refreshGroupSelect();
-      renderRulesList();
+      await loadConfigBanner();
+      await loadMcpSources();
+      await refreshStatuses();
+      setInterval(() => { refreshStatuses().catch(() => {}); }, 45000);
+      setInterval(() => { loadConfigBanner().catch(() => {}); }, 60000);
     })();
 """
 

@@ -35,7 +35,12 @@ modules:
     sasl_mechanism: SCRAM-SHA-512
     sasl_username: sdocs_mcp
     sasl_password: REPLACE_ME
-    topic_allowlist: []                   # обязательно, иначе ни consume, ни produce
+    topic_allowlist:
+      - sdocs.prometheus.metrics
+      - sdocs.alerts.rules
+      - sdocs.alerts.events
+      - sdocs.alerts.lock
+    allow_produce: true                   # для Cron, Alert sync и событий
 
   # ───── PostgreSQL ───────────────────────────────────────────────
   # Зачем: диагностика и разрешённые SELECT-ы по allowlisted_queries.

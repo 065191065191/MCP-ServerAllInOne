@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hmac
 import json
 import logging
@@ -38,6 +39,17 @@ from sdocs_mcp.mtls import resolve_mcp_mtls_uvicorn_kwargs
 from sdocs_mcp.opensearch_tools import connect_opensearch
 from sdocs_mcp.postgres_tools import postgres_allowlisted_query_catalog
 from sdocs_mcp.redis_tools import redis_ping, redis_setex
+from sdocs_mcp.alerts_evaluator import rule_ui_statuses
+from sdocs_mcp.alerts_kafka_sync import is_alert_leader, publish_rules_snapshot, start_alerts_kafka_sync, stop_alerts_kafka_sync
+from sdocs_mcp.alerts_mcp_sources import list_sources
+from sdocs_mcp.alerts_store import save_from_ui, snapshot as alerts_snapshot
+from sdocs_mcp.config_runtime import public_config_status, refresh_config_state_from_disk
+from sdocs_mcp.embedded_mcp import (
+    EmbeddedMcpHolder,
+    config_reload_interval_seconds,
+    config_wait_seconds,
+)
+from sdocs_mcp.kafka_topics import SDOCS_KAFKA_TOPICS_CREATE, TOPIC_NOTES
 from sdocs_mcp.server import build_mcp
 from sdocs_mcp.tool_audit_http_context import ToolAuditCallerMiddleware
 from sdocs_mcp.ui_nav import inject_subpage
@@ -67,8 +79,8 @@ _INVOKE_ALLOWLIST: dict[str, dict[str, Any] | None] = {
 UI_BASE = normalize_ui_base_path()
 UI_PAGES = normalize_ui_pages_prefix()
 
-# Встроенный MCP: lifespan sub-app Starlette при mount() не вызывается — держим session_manager здесь.
-_embedded_mcp: FastMCP | None = None
+# Встроенный MCP: session_manager в lifespan; конфиг — wait + reload (embedded_mcp.py).
+_embedded_mcp_holder: EmbeddedMcpHolder | None = None
 
 
 @asynccontextmanager
@@ -79,17 +91,26 @@ async def _app_lifespan(_application: FastAPI):
     )
 
     start_prometheus_metrics_cron()
+    start_alerts_kafka_sync()
+    stop = asyncio.Event()
+    sm_task: asyncio.Task[None] | None = None
     try:
-        if _embedded_mcp is not None:
-            async with _embedded_mcp.session_manager.run():
-                yield
-        else:
-            yield
+        if _embedded_mcp_holder is not None:
+            sm_task = asyncio.create_task(_embedded_mcp_holder.run_session_manager_loop(stop))
+        yield
     finally:
+        stop.set()
+        if sm_task is not None:
+            sm_task.cancel()
+            try:
+                await sm_task
+            except asyncio.CancelledError:
+                pass
+        stop_alerts_kafka_sync()
         stop_prometheus_metrics_cron()
 
 
-app = FastAPI(title="SDocsMCP UI", version="0.6.8", lifespan=_app_lifespan)
+app = FastAPI(title="SDocsMCP UI", version="0.6.9", lifespan=_app_lifespan)
 web_router = APIRouter()
 pages_router = APIRouter()
 
@@ -770,6 +791,103 @@ async def api_auth_config() -> JSONResponse:
     )
 
 
+@web_router.get("/api/config-load")
+async def api_config_load(req: Request) -> JSONResponse:
+    """Статус конфига для UI/LLM: ok / missing / invalid + время загрузки (без пути к файлу)."""
+    started = time.perf_counter()
+    ok = False
+    try:
+        _secure_api(req, "config_load")
+        try:
+            refresh_config_state_from_disk()
+        except Exception:
+            pass
+        body = public_config_status()
+        ok = True
+        return JSONResponse(body)
+    finally:
+        _record_request_timing(started, ok)
+
+
+@web_router.get("/api/kafka/topics-required")
+async def api_kafka_topics_required(req: Request) -> JSONResponse:
+    started = time.perf_counter()
+    ok = False
+    try:
+        _secure_api(req, "kafka_topics")
+        topics = [
+            {"name": t, "note": TOPIC_NOTES.get(t, "")}
+            for t in SDOCS_KAFKA_TOPICS_CREATE
+        ]
+        ok = True
+        return JSONResponse({"topics": topics, "allowlist_hint": "добавьте все имена в modules.kafka.topic_allowlist"})
+    finally:
+        _record_request_timing(started, ok)
+
+
+@web_router.get("/api/alerts/mcp-sources")
+async def api_alerts_mcp_sources(req: Request) -> JSONResponse:
+    started = time.perf_counter()
+    ok = False
+    try:
+        _secure_api(req, "alerts_mcp_sources")
+        cfg = _cfg()
+        ok = True
+        return JSONResponse({"sources": list_sources(cfg)})
+    finally:
+        _record_request_timing(started, ok)
+
+
+@web_router.get("/api/alerts/status")
+async def api_alerts_status(req: Request) -> JSONResponse:
+    started = time.perf_counter()
+    ok = False
+    try:
+        _secure_api(req, "alerts_status")
+        cfg = _cfg()
+        ok = True
+        return JSONResponse(
+            {
+                "leader": is_alert_leader(),
+                "instance": (os.environ.get("HOSTNAME") or "").strip() or "local",
+                "rules": rule_ui_statuses(cfg),
+                "store_revision": alerts_snapshot().get("revision"),
+            }
+        )
+    finally:
+        _record_request_timing(started, ok)
+
+
+@web_router.get("/api/alerts/rules")
+async def api_alerts_rules_get(req: Request) -> JSONResponse:
+    started = time.perf_counter()
+    ok = False
+    try:
+        _secure_api(req, "alerts_rules_get")
+        ok = True
+        return JSONResponse(alerts_snapshot())
+    finally:
+        _record_request_timing(started, ok)
+
+
+@web_router.post("/api/alerts/rules")
+async def api_alerts_rules_post(req: Request, body: dict[str, Any]) -> JSONResponse:
+    started = time.perf_counter()
+    ok = False
+    try:
+        _secure_api(req, "alerts_rules_post")
+        groups = body.get("groups")
+        rules = body.get("rules")
+        if not isinstance(groups, list) or not isinstance(rules, list):
+            raise HTTPException(status_code=400, detail="groups and rules must be arrays")
+        snap = save_from_ui(groups, rules)
+        published = publish_rules_snapshot()
+        ok = True
+        return JSONResponse({"ok": True, "kafka_published": published, **snap})
+    finally:
+        _record_request_timing(started, ok)
+
+
 @web_router.get("/api/config-path")
 async def api_config_path(req: Request) -> JSONResponse:
     started = time.perf_counter()
@@ -1178,7 +1296,7 @@ app.include_router(pages_router, prefix=ui_pages_base() if UI_PAGES else UI_BASE
 
 def _embed_sdocs_mcp_if_enabled() -> None:
     """Один порт с UI: Streamable HTTP MCP на пути {base}/mcp (SDOCS_MCP_EMBED_MCP=true)."""
-    global _embedded_mcp
+    global _embedded_mcp_holder
     if (os.environ.get("SDOCS_MCP_EMBED_MCP") or "").strip().lower() not in ("1", "true", "yes"):
         return
     cfg = load_config()
@@ -1190,17 +1308,16 @@ def _embed_sdocs_mcp_if_enabled() -> None:
             audit_cfg=os_mod.tool_call_audit,
             path_prefix=mcp_path,
         )
-    mcp = build_mcp(cfg, streamable_http_path="/")
-    mcp_app = wrap_mcp_http_app(mcp.streamable_http_app())
-    install_access_logging(mcp_app, cfg.logging)
-    _embedded_mcp = mcp
-    # Mount с завершающим / — иначе Starlette даёт 307 /sdocs/mcp → /sdocs/mcp/
+    holder = EmbeddedMcpHolder(streamable_http_path="/")
+    _embedded_mcp_holder = holder
     mount_path = mcp_path if mcp_path.endswith("/") else f"{mcp_path}/"
-    app.mount(mount_path, mcp_app)
+    app.mount(mount_path, holder.asgi_app)
     logging.getLogger("sdocs_mcp.ui").info(
         "Embedded sdocs-mcp: Streamable HTTP on same port as UI at path %s "
-        "(set SDOCS_MCP_EMBED_MCP=false to run sdocs-mcp on a separate port).",
+        "(SDOCS_MCP_CONFIG_WAIT_SECONDS=%s, SDOCS_MCP_CONFIG_RELOAD_INTERVAL=%s).",
         mount_path,
+        int(config_wait_seconds()),
+        int(config_reload_interval_seconds()),
     )
 
 
@@ -1670,10 +1787,17 @@ _OPS_HTML_RAW = """<!DOCTYPE html>
         $('auth-hint').textContent = '';
       }
       try {
-        const c = await jget('/api/config-path');
-        $('cfgpath').textContent = 'Конфиг: ' + (c.path || '(не найден)') + (c.exists ? ' — файл найден' : ' — файл не найден') + (c.source ? ' [' + c.source + ']' : '') + (c.env_sdocs_mcp_config ? ' (env SDOCS_MCP_CONFIG=' + c.env_sdocs_mcp_config + ')' : '');
+        const c = await jget('/api/config-load');
+        const el = $('cfgpath');
+        if (c.state === 'ok') {
+          el.innerHTML = '<span style="color:#6ee7a0;font-weight:600">✓ Конфиг загружен</span>' + (c.loaded_at ? ' · ' + c.loaded_at : '') + ' — ' + (c.message || '');
+        } else if (c.state === 'invalid') {
+          el.innerHTML = '<span style="color:#fca5a5;font-weight:600">✗ Ошибка конфига</span> — ' + (c.error || c.message || '');
+        } else {
+          el.innerHTML = '<span style="color:#fcd34d;font-weight:600">○ Конфиг не загружен</span> — ' + (c.message || '');
+        }
       } catch (e) {
-        $('cfgpath').textContent = 'Конфиг: ошибка — ' + e;
+        $('cfgpath').textContent = 'Статус конфига: ошибка — ' + e;
       }
       buildInvokeButtons();
       initTabs();

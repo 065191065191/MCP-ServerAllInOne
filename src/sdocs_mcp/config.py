@@ -525,6 +525,63 @@ def config_path_for_display() -> dict[str, str | bool]:
     return {"path": str(path) if path else "", "file_found": found, "source": source}
 
 
+_KNOWN_MODULE_KEYS = frozenset(
+    {"postgres", "redis", "kafka", "prometheus", "mail", "opensearch", "ssh", "posgress"}
+)
+
+
+def config_yaml_diagnose() -> dict[str, object]:
+    """
+    Подсказки, если file_found=true, но modules.*.enabled всё false:
+    неверная вложенность YAML, опечатки в именах секций и т.п.
+    """
+    path, _ = resolve_config_path()
+    if path is None or not path.is_file():
+        return {"file_found": False}
+    raw = _load_yaml(path)
+    if not raw:
+        return {
+            "file_found": True,
+            "yaml_empty": True,
+            "hint": "Файл пустой или не YAML-словарь — задайте корневой ключ modules:.",
+        }
+    top = [k for k in raw if k not in ("modules", "logging")]
+    mods = raw.get("modules")
+    mod_keys: list[str] = []
+    enabled_in_file: list[str] = []
+    if isinstance(mods, dict):
+        mod_keys = sorted(str(k) for k in mods)
+        for k, v in mods.items():
+            if isinstance(v, dict) and v.get("enabled") is True:
+                enabled_in_file.append(str(k))
+    misplaced = [k for k in top if k in _KNOWN_MODULE_KEYS or k.replace("_", "") in _KNOWN_MODULE_KEYS]
+    hints: list[str] = []
+    if misplaced:
+        hints.append(
+            f"Секции {misplaced} на корневом уровне — перенесите под modules: (сейчас игнорируются)."
+        )
+    if not isinstance(mods, dict):
+        hints.append("Нет ключа modules: в YAML — все модули остаются enabled: false.")
+    elif not enabled_in_file and mod_keys:
+        hints.append(
+            f"В modules есть {mod_keys}, но нигде нет enabled: true — добавьте enabled: true в нужные секции."
+        )
+    elif not mod_keys and top:
+        hints.append(f"Корневые ключи файла: {top}. Ожидается modules.postgres, modules.redis, …")
+    unknown_mods = [k for k in mod_keys if k not in _KNOWN_MODULE_KEYS]
+    if unknown_mods:
+        hints.append(
+            f"Неизвестные секции в modules: {unknown_mods} (ожидаются postgres, redis, kafka, …)."
+        )
+    return {
+        "file_found": True,
+        "top_level_keys": top,
+        "modules_keys": mod_keys,
+        "enabled_true_in_yaml": enabled_in_file,
+        "hints": hints,
+    }
+
+
 def load_config() -> AppConfig:
     path, _src = resolve_config_path()
     data = _load_yaml(path) if path and path.is_file() else {}
