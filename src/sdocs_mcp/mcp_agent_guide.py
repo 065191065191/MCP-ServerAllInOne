@@ -63,7 +63,7 @@ _TOOL_HINTS: dict[str, list[tuple[str, str]]] = {
         ("mail_imap_list_mailboxes", "Список ящиков IMAP."),
         ("mail_imap_search", "Поиск писем."),
         ("mail_imap_fetch_rfc822", "Получить письмо по UID."),
-        ("mail_smtp_send", "Отправить письмо SMTP."),
+        ("mail_smtp_send", "SMTP: to_addr, subject, body_text (не to/body)."),
     ],
     "opensearch": [
         ("opensearch_cluster_health", "Health кластера."),
@@ -76,7 +76,7 @@ _TOOL_HINTS: dict[str, list[tuple[str, str]]] = {
         ("opensearch_allocation_explain", "Explain allocation."),
         ("opensearch_list_indices", "Список индексов."),
         ("opensearch_get_mapping", "Mapping индекса."),
-        ("opensearch_search", "Поиск JSON query."),
+        ("opensearch_search", "Поиск: query_json — строка JSON DSL."),
         ("opensearch_count", "Count документов."),
         ("opensearch_delete_index", "Удалить индекс (если allow_write)."),
     ],

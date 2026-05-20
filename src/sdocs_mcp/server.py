@@ -234,7 +234,7 @@ def _register_mail(mcp: FastMCP, cfg: MailModuleConfig) -> None:
         body_text: str,
         from_addr: str | None = None,
     ) -> str:
-        """Send mail via SMTP (TLS/STARTTLS per config); secrets from env vars."""
+        """SMTP: аргументы to_addr, subject, body_text (не to/body). from_addr опционально."""
         return mail_tools.mail_smtp_send(cfg, to_addr, subject, body_text, from_addr)
 
 
@@ -416,7 +416,7 @@ def _register_opensearch(mcp: FastMCP, cfg: OpenSearchModuleConfig) -> None:
 
     @mcp.tool()
     def opensearch_search(index: str, query_json: str) -> str:
-        """Search with a JSON DSL body; size is capped by search_max_size."""
+        """Поиск: query_json — строка JSON DSL (не query). Пример: {"query":{"match_all":{}}}."""
         return opensearch_tools.opensearch_search(cfg, index, query_json)
 
     @mcp.tool()

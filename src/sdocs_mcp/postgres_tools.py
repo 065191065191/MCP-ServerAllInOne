@@ -56,6 +56,11 @@ def _rows(cur) -> list[dict[str, Any]]:
     return list(cur.fetchall())
 
 
+def _schema_literals_sql(schemas: list[str]) -> sql.Composable:
+    """Строковые имена схем в IN (...), не sql.Identifier (иначе PG видит column "public")."""
+    return sql.SQL(", ").join(sql.Literal(s) for s in schemas)
+
+
 def postgres_connections_overview(cfg: PostgresModuleConfig) -> str:
     """Aggregate session counts by state; lightweight activity snapshot."""
     q = """
@@ -86,7 +91,7 @@ def postgres_long_running_queries(cfg: PostgresModuleConfig) -> str:
            left(query, 200) AS query_preview
     FROM pg_stat_activity
     WHERE state <> 'idle'
-      AND query NOT ILIKE '%pg_stat_activity%'
+      AND query NOT ILIKE '%%pg_stat_activity%%'
     ORDER BY query_start ASC NULLS LAST
     LIMIT %s;
     """
@@ -153,7 +158,7 @@ def postgres_table_sizes(cfg: PostgresModuleConfig) -> str:
     top_n = max(1, min(cfg.top_n_tables, 100))
     if not cfg.schema_allowlist:
         raise ValueError("schema_allowlist must be non-empty")
-    schema_sql = sql.SQL(", ").join(sql.Identifier(s) for s in cfg.schema_allowlist)
+    schema_sql = _schema_literals_sql(cfg.schema_allowlist)
     q = sql.SQL(
         """
         SELECT n.nspname AS schema, c.relname AS table,
@@ -179,7 +184,7 @@ def postgres_index_usage(cfg: PostgresModuleConfig) -> str:
     top_n = max(1, min(cfg.top_n_tables, 100))
     if not cfg.schema_allowlist:
         raise ValueError("schema_allowlist must be non-empty")
-    schema_sql = sql.SQL(", ").join(sql.Identifier(s) for s in cfg.schema_allowlist)
+    schema_sql = _schema_literals_sql(cfg.schema_allowlist)
     q = sql.SQL(
         """
         SELECT schemaname, relname AS table, indexrelname AS index,
@@ -234,7 +239,7 @@ def postgres_autovacuum_health(cfg: PostgresModuleConfig) -> str:
     top_n = max(1, min(cfg.top_n_tables, 100))
     if not cfg.schema_allowlist:
         raise ValueError("schema_allowlist must be non-empty")
-    schema_sql = sql.SQL(", ").join(sql.Identifier(s) for s in cfg.schema_allowlist)
+    schema_sql = _schema_literals_sql(cfg.schema_allowlist)
     q = sql.SQL(
         """
         SELECT schemaname, relname,

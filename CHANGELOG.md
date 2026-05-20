@@ -5,6 +5,14 @@
 
 ## [Unreleased]
 
+## [0.6.12] — 2026-05-20
+
+### Исправлено
+
+- **PostgreSQL:** `%%` в `ILIKE` (устранён ложный placeholder `%p` в `postgres_long_running_queries`).
+- **PostgreSQL:** `schema_allowlist` в `IN (...)` через `sql.Literal` — `IN ('public')`, не `IN ("public")`.
+- **Mail / OpenSearch:** уточнены описания tools (`to_addr`, `body_text`, `query_json`).
+
 ## [0.6.11] — 2026-05-20
 
 ### Исправлено
