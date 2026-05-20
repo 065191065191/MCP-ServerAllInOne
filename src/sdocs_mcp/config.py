@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 import re
 from pathlib import Path
@@ -492,6 +493,53 @@ def _normalize_modules_keys(data: dict) -> dict:
     return data
 
 
+_log = logging.getLogger("sdocs_mcp.config")
+
+_DEFAULT_HEALTH_PING_SQL = (
+    "SELECT current_database() AS db, current_user AS usr, now() AS ts"
+)
+
+
+def _sanitize_postgres_allowlisted_queries(data: dict) -> dict:
+    """
+    Записи только с id (без sql) ломали весь AppConfig.
+    Пустой sql пропускаем; для id=health-ping подставляем стандартный SELECT.
+    """
+    mods = data.get("modules")
+    if not isinstance(mods, dict):
+        return data
+    pg = mods.get("postgres")
+    if not isinstance(pg, dict):
+        return data
+    raw = pg.get("allowlisted_queries")
+    if not isinstance(raw, list):
+        return data
+    cleaned: list[dict] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        qid = str(item.get("id") or "").strip()
+        sql = str(item.get("sql") or "").strip()
+        if not qid:
+            _log.warning("postgres.allowlisted_queries: пропуск записи без id")
+            continue
+        if not sql and qid == "health-ping":
+            item = {**item, "sql": _DEFAULT_HEALTH_PING_SQL}
+            if not item.get("description"):
+                item["description"] = "Проверка соединения"
+            cleaned.append(item)
+            continue
+        if not sql:
+            _log.warning(
+                "postgres.allowlisted_queries: пропуск %r — нужно поле sql (SELECT …)",
+                qid,
+            )
+            continue
+        cleaned.append(item)
+    pg["allowlisted_queries"] = cleaned
+    return data
+
+
 # Порядок поиска, если SDOCS_MCP_CONFIG не задан (типичные mount в K8s).
 _DEFAULT_CONFIG_FILES: tuple[Path, ...] = (
     Path("/config/app/mcp/mcp.conf"),
@@ -586,6 +634,7 @@ def load_config() -> AppConfig:
     path, _src = resolve_config_path()
     data = _load_yaml(path) if path and path.is_file() else {}
     data = _normalize_modules_keys(data)
+    data = _sanitize_postgres_allowlisted_queries(data)
     extra_path = (os.environ.get("SDOCS_MCP_SSH_HOSTS_FILE") or "").strip()
     if extra_path:
         extra_hosts = _load_ssh_hosts_extra(Path(extra_path))

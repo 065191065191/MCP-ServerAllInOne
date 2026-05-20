@@ -90,7 +90,8 @@ class EmbeddedMcpHolder:
             record_config_loaded(cfg)
         except Exception as e:
             record_config_loaded(None, error=str(e))
-            raise
+            _log.error("Config load failed, MCP runs with empty modules: %s", e)
+            cfg = AppConfig()
         mcp = build_mcp(cfg, streamable_http_path=self._streamable_http_path)
         asgi = wrap_mcp_http_app(mcp.streamable_http_app())
         install_access_logging(asgi, cfg.logging)
@@ -139,22 +140,38 @@ class EmbeddedMcpHolder:
 
     async def run_session_manager_loop(self, stop: asyncio.Event) -> None:
         await self.wait_for_config_file()
-        await self.rebuild(force=True)
+        try:
+            await self.rebuild(force=True)
+        except Exception as e:
+            _log.exception("Initial embedded MCP rebuild failed: %s", e)
         interval = config_reload_interval_seconds()
         while not stop.is_set():
-            assert self._mcp is not None
+            if self._mcp is None:
+                try:
+                    await self.rebuild(force=True)
+                except Exception as e:
+                    _log.error("Embedded MCP rebuild failed: %s", e)
+                    await asyncio.sleep(5)
+                    continue
             poll_task = asyncio.create_task(self._poll_config_or_stop(stop, interval))
             try:
                 async with self._mcp.session_manager.run():
                     await poll_task
             except asyncio.CancelledError:
                 raise
+            except Exception as e:
+                _log.exception("session_manager.run failed: %s", e)
+                await asyncio.sleep(5)
+                continue
             if stop.is_set():
                 break
             changed = poll_task.result() if not poll_task.cancelled() else False
             self._reload_event.clear()
             if changed:
-                await self.rebuild(force=True)
+                try:
+                    await self.rebuild(force=True)
+                except Exception as e:
+                    _log.error("Embedded MCP reload failed: %s", e)
             else:
                 break
 

@@ -5,6 +5,14 @@
 
 ## [Unreleased]
 
+## [0.6.11] — 2026-05-20
+
+### Исправлено
+
+- **Конфиг:** `allowlisted_queries` без `sql` больше не валит весь `AppConfig` (пропуск или автозаполнение `health-ping`).
+- **embedded MCP:** при ошибке разбора YAML — fallback на пустые модули, цикл `session_manager` не падает.
+- **Alert Kafka consumer:** реже лог при `ValidationError` конфига (30 с пауза).
+
 ## [0.6.10] — 2026-05-20
 
 ### Исправлено

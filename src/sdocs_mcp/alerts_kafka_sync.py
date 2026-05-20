@@ -84,8 +84,12 @@ def _rules_consumer_loop() -> None:
                         _log.warning("rules message parse error: %s", e)
             consumer.close()
         except Exception as e:
-            _log.warning("rules consumer restart: %s", e)
-            time.sleep(5)
+            # Невалидный mcp.conf (напр. allowlisted_queries без sql) — не спамить traceback.
+            if "ValidationError" in type(e).__name__ or "validation error" in str(e).lower():
+                _log.error("rules consumer: invalid config — %s", e)
+            else:
+                _log.warning("rules consumer restart: %s", e)
+            time.sleep(30)
 
 
 def _leader_loop() -> None:
