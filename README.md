@@ -2,6 +2,8 @@
 
 Модульный **MCP-сервер** на Python (**SDocsMCP**): OpenSearch (включая RAG), Kafka, PostgreSQL, Redis, Prometheus, почта, SSH. В каждом бэкенде — **лимиты и безопасные сценарии** без произвольных опасных операций из коробки.
 
+Отдельный MCP для **S3/Ceph** — **[`s3-mcp`](s3-mcp/README.md)** (`s3-mcp`, порт **8766**): список bucket, статистика, write-test и **`s3_object_metadata`** — проверка документа по размеру и дате без скачивания содержимого.
+
 **Репозиторий:** [github.com/065191065191/MCP-ServerAllInOne](https://github.com/065191065191/MCP-ServerAllInOne)
 
 ---
@@ -44,6 +46,7 @@
 |---------|------------|-------------------|
 | `sdocs-mcp` | Только MCP по HTTP | `8765`, путь `/mcp` |
 | `sdocs-mcp-ui` | Дашборд, `/metrics`, опционально встроенный MCP | `8888` |
+| **`s3-mcp`** | **S3/Ceph MCP** (отдельный сервер) | **`8766`**, путь `/mcp` |
 
 - **Конфиг:** опционально **`SDOCS_MCP_CONFIG`** — абсолютный путь к YAML. Если переменная не задана или файла нет, подставляется пустой YAML: работают **дефолты** `AppConfig` (в YAML указывайте только отличия). Шаблоны: **`config.example.yaml`**, демо под Docker: **`config.docker.yaml`**, пример RAG + Kafka + Postgres + Redis: **`config.integrated.example.yaml`**.
 - **Прод:** образы, Compose, OpenShift, systemd — **[`deploy/README.md`](deploy/README.md)**.
@@ -63,6 +66,8 @@
 | [`docs/TOOL_CALL_AUDIT.md`](docs/TOOL_CALL_AUDIT.md) | Аудит вызовов MCP tools в OpenSearch |
 | [`docs/SSH_SCALE.md`](docs/SSH_SCALE.md) | Много SSH-хостов: лимиты, `SDOCS_MCP_SSH_HOSTS_FILE`, CSV |
 | [`docs/INSTALL_AND_RELEASE.md`](docs/INSTALL_AND_RELEASE.md) | Релизные архивы и установка |
+| [`s3-mcp/README.md`](s3-mcp/README.md) | **S3 MCP**: env, tools, curl |
+| [`docs/S3_MCP.md`](docs/S3_MCP.md) | Описание S3 MCP и `s3_object_metadata` |
 | [`deploy/README.md`](deploy/README.md) | Промышленный деплой |
 
 ---

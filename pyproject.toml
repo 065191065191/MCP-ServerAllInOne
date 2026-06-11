@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "sdocs-mcp"
 version = "0.6.14"
-description = "SDocsMCP — MCP по HTTP: модули данных (OpenSearch, Kafka, Postgres, Redis, Prometheus, SSH, почта, Atlassian)"
+description = "SDocsMCP + S3 MCP — MCP по HTTP: OpenSearch, Kafka, Postgres, Redis, Prometheus, SSH, почта, S3/Ceph"
 readme = "README.md"
 authors = [{ name = "Gos Stepan Ulievich" }]
 requires-python = ">=3.11"
@@ -26,6 +26,7 @@ dependencies = [
 [project.scripts]
 sdocs-mcp = "sdocs_mcp.server:main"
 sdocs-mcp-ui = "sdocs_mcp.info_app:main"
+s3-mcp = "s3_mcp.server:main"
 
 [project.optional-dependencies]
 dev = [

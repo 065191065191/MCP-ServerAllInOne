@@ -5,6 +5,15 @@
 
 ## [Unreleased]
 
+## [s3-mcp 0.1.0] — 2026-06-08
+
+### Добавлено
+
+- Отдельный MCP-сервер **`s3-mcp`** (порт 8766): Ceph/S3 диагностика на AWS Sig V4 (stdlib).
+- Tools: `s3_list_buckets`, `s3_bucket_stats`, `s3_bucket_latest_files`, `s3_write_test`, **`s3_object_metadata`** (HEAD — размер и дата, без содержимого).
+- Документация: [`s3-mcp/README.md`](s3-mcp/README.md), [`docs/S3_MCP.md`](docs/S3_MCP.md).
+- Скрипт архива: `scripts/build_s3_mcp_zip.py`.
+
 ## [0.6.14] — 2026-05-20
 
 ### Добавлено
