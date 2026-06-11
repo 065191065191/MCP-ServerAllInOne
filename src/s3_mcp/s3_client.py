@@ -413,3 +413,28 @@ class S3Client:
             "error": detail or f"HTTP {code}" if code else "request failed",
             "content_returned": False,
         }
+
+    def put_object(self, bucket: str, key: str, body: bytes) -> dict[str, Any]:
+        """PUT объекта. Возвращает метаданные, не эхо тела."""
+        object_key = key.lstrip("/")
+        self._raw_req("PUT", f"{bucket}/{object_key}", body=body)
+        meta = self.get_object_metadata(bucket, object_key)
+        meta["written"] = True
+        meta["bytes_written"] = len(body)
+        return meta
+
+    def delete_object(self, bucket: str, key: str) -> dict[str, Any]:
+        """DELETE объекта. Перед удалением — HEAD для метаданных в ответе."""
+        object_key = key.lstrip("/")
+        before = self.get_object_metadata(bucket, object_key)
+        if not before.get("exists"):
+            return {"ok": False, "deleted": False, "bucket": bucket, "key": object_key, "reason": "not_found"}
+        self._raw_req("DELETE", f"{bucket}/{object_key}")
+        return {
+            "ok": True,
+            "deleted": True,
+            "bucket": bucket,
+            "key": object_key,
+            "previous_size_bytes": before.get("size_bytes"),
+            "previous_last_modified": before.get("last_modified"),
+        }

@@ -10,9 +10,22 @@ from sdocs_mcp.config import (
 from sdocs_mcp.mcp_agent_guide import (
     build_capabilities_payload,
     build_mcp_instructions,
+    load_llm_system_prompt,
     tools_by_module,
 )
 from sdocs_mcp.server import build_mcp
+
+
+def test_llm_system_prompt_loaded() -> None:
+    text = load_llm_system_prompt()
+    assert "sdocs_mcp_status" in text
+    assert "s3_put_object" in text
+
+
+def test_capabilities_includes_llm_prompt() -> None:
+    cap = build_capabilities_payload(AppConfig(modules=ModulesConfig()))
+    assert "llm_system_prompt" in cap
+    assert cap["s3_mcp_note"]
 
 
 def test_capabilities_lists_core_always() -> None:

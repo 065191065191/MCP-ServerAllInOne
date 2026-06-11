@@ -464,6 +464,17 @@ class AccessLogConfig(BaseModel):
     filename: str = "mcp-access.log"
 
 
+class S3McpModuleConfig(BaseModel):
+    """
+    Политика опасных tools отдельного сервера s3-mcp (порт 8766).
+    Учётные данные S3 — env S3_ENDPOINT / S3_ACCESS_KEY / S3_SECRET_KEY.
+    """
+
+    allow_put: bool = False
+    allow_delete: bool = False
+    max_put_bytes: int = Field(default=1_048_576, ge=1, le=100_000_000)  # 1 МБ по умолчанию
+
+
 class ModulesConfig(BaseModel):
     opensearch: OpenSearchModuleConfig = Field(default_factory=OpenSearchModuleConfig)
     kafka: KafkaModuleConfig = Field(default_factory=KafkaModuleConfig)
@@ -473,6 +484,7 @@ class ModulesConfig(BaseModel):
     prometheus: PrometheusModuleConfig = Field(default_factory=PrometheusModuleConfig)
     mail: MailModuleConfig = Field(default_factory=MailModuleConfig)
     ssh: SshModuleConfig = Field(default_factory=SshModuleConfig)
+    s3_mcp: S3McpModuleConfig = Field(default_factory=S3McpModuleConfig)
 
 
 class AppConfig(BaseModel):
@@ -604,7 +616,18 @@ def config_path_for_display() -> dict[str, str | bool]:
 
 
 _KNOWN_MODULE_KEYS = frozenset(
-    {"postgres", "redis", "kafka", "prometheus", "mail", "opensearch", "ssh", "alerting", "posgress"}
+    {
+        "postgres",
+        "redis",
+        "kafka",
+        "prometheus",
+        "mail",
+        "opensearch",
+        "ssh",
+        "alerting",
+        "s3_mcp",
+        "posgress",
+    }
 )
 
 

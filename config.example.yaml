@@ -13,6 +13,12 @@
 # Для «всё на одном порту» (UI + MCP + /metrics) запускайте sdocs-mcp-ui с SDOCS_MCP_EMBED_MCP=true.
 
 modules:
+  # Политика отдельного MCP s3-mcp (порт 8766). Учётные данные S3 — env S3_*.
+  # Включить запись/удаление удобнее через UI: Консоль → MCP → S3 MCP.
+  s3_mcp:
+    allow_put: false
+    allow_delete: false
+    max_put_bytes: 1048576   # 1 МБ — лимит s3_put_object
 
   # ───── OpenSearch ───────────────────────────────────────────────
   # Зачем: поиск/чтение индексов; опционально RAG-память агента и журнал вызовов tools.

@@ -28,7 +28,18 @@
 
 Оба сервера можно поднять на одном хосте на разных портах.
 
-## Tools
+## Tools записи (выключены по умолчанию)
+
+| Tool | Конфиг | UI |
+|------|--------|-----|
+| `s3_put_object` | `modules.s3_mcp.allow_put: true` | Консоль → MCP → S3 MCP |
+| `s3_delete_object` | `modules.s3_mcp.allow_delete: true` | то же |
+
+После сохранения в UI процесс `s3-mcp` завершится (watch `S3_MCP_CONFIG_RELOAD_INTERVAL`) — K8s перезапустит под с новым набором tools.
+
+`s3_put_object`: аргументы `bucket`, `key`, `content_base64` (лимит `max_put_bytes`).
+
+## Tools чтения
 
 ### `s3_object_metadata(bucket, key)`
 

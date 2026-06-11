@@ -50,6 +50,7 @@ from sdocs_mcp.alerts_kafka_resolve import alerts_kafka_ready, resolve_alerts_ka
 from sdocs_mcp.alerts_kafka_sync import is_alert_leader
 from sdocs_mcp.config_runtime import public_config_status, refresh_config_state_from_disk
 from sdocs_mcp.mcp_agent_guide import build_capabilities_payload, build_mcp_instructions, capabilities_json
+from sdocs_mcp.mcp_tool_docs import tool_doc
 from sdocs_mcp.mtls import resolve_mcp_mtls_uvicorn_kwargs
 from sdocs_mcp.tool_audit_http_context import ToolAuditCallerMiddleware
 
@@ -60,66 +61,54 @@ def _env_truthy(name: str) -> bool:
 
 
 def _register_postgres(mcp: FastMCP, cfg: PostgresModuleConfig) -> None:
-    @mcp.tool()
+    @mcp.tool(description=tool_doc("postgres_connections_overview"))
     def postgres_connections_overview() -> str:
-        """Safe diagnostics: session counts grouped by state + total."""
         return postgres_tools.postgres_connections_overview(cfg)
 
-    @mcp.tool()
+    @mcp.tool(description=tool_doc("postgres_long_running_queries"))
     def postgres_long_running_queries() -> str:
-        """Safe diagnostics: top active queries by duration (preview only)."""
         return postgres_tools.postgres_long_running_queries(cfg)
 
-    @mcp.tool()
+    @mcp.tool(description=tool_doc("postgres_blocking_chains"))
     def postgres_blocking_chains() -> str:
-        """Safe diagnostics: blocked vs blocking sessions (row cap)."""
         return postgres_tools.postgres_blocking_chains(cfg)
 
-    @mcp.tool()
+    @mcp.tool(description=tool_doc("postgres_database_sizes"))
     def postgres_database_sizes() -> str:
-        """Safe diagnostics: largest databases by on-disk size."""
         return postgres_tools.postgres_database_sizes(cfg)
 
-    @mcp.tool()
+    @mcp.tool(description=tool_doc("postgres_table_sizes"))
     def postgres_table_sizes() -> str:
-        """Safe diagnostics: largest tables within schema_allowlist."""
         return postgres_tools.postgres_table_sizes(cfg)
 
-    @mcp.tool()
+    @mcp.tool(description=tool_doc("postgres_index_usage"))
     def postgres_index_usage() -> str:
-        """Safe diagnostics: indexes ordered by low idx_scan (candidates for review)."""
         return postgres_tools.postgres_index_usage(cfg)
 
-    @mcp.tool()
+    @mcp.tool(description=tool_doc("postgres_cache_hit_ratio"))
     def postgres_cache_hit_ratio() -> str:
-        """Safe diagnostics: buffer cache hit ratio from pg_statio_user_tables."""
         return postgres_tools.postgres_cache_hit_ratio(cfg)
 
-    @mcp.tool()
+    @mcp.tool(description=tool_doc("postgres_replication_lag"))
     def postgres_replication_lag() -> str:
-        """Safe diagnostics: pg_stat_replication rows if this is a primary."""
         return postgres_tools.postgres_replication_lag(cfg)
 
-    @mcp.tool()
+    @mcp.tool(description=tool_doc("postgres_autovacuum_health"))
     def postgres_autovacuum_health() -> str:
-        """Safe diagnostics: dead tuples / autovacuum timestamps (top-N)."""
         return postgres_tools.postgres_autovacuum_health(cfg)
 
-    @mcp.tool()
+    @mcp.tool(description=tool_doc("postgres_statements_top"))
     def postgres_statements_top() -> str:
-        """Safe diagnostics: top statements by total time (requires pg_stat_statements)."""
         return postgres_tools.postgres_statements_top(cfg)
 
     if cfg.allowlisted_queries:
 
-        @mcp.tool()
+        @mcp.tool(description=tool_doc("postgres_allowlisted_query_catalog"))
         def postgres_allowlisted_query_catalog() -> str:
-            """Allowlisted SQL query ids and descriptions (no SQL text); use before postgres_allowlisted_query."""
             return postgres_tools.postgres_allowlisted_query_catalog(cfg)
 
-        @mcp.tool()
+        @mcp.tool(description=tool_doc("postgres_allowlisted_query"))
         def postgres_allowlisted_query(query_id: str) -> str:
-            """Run one SELECT from config allowlist by query_id (clients pass id only, not raw SQL)."""
             return postgres_tools.postgres_allowlisted_query(cfg, query_id)
 
 
@@ -177,19 +166,16 @@ def _register_redis(mcp: FastMCP, cfg: RedisModuleConfig) -> None:
 
 
 def _register_kafka(mcp: FastMCP, cfg: KafkaModuleConfig) -> None:
-    @mcp.tool()
+    @mcp.tool(description=tool_doc("kafka_list_topics"))
     def kafka_list_topics() -> str:
-        """List cluster topics (truncated to list_topics_max)."""
         return kafka_tools.kafka_list_topics(cfg)
 
-    @mcp.tool()
+    @mcp.tool(description=tool_doc("kafka_describe_topic"))
     def kafka_describe_topic(topic: str) -> str:
-        """Partition IDs for a topic (must be in topic_allowlist)."""
         return kafka_tools.kafka_describe_topic(cfg, topic)
 
-    @mcp.tool()
+    @mcp.tool(description=tool_doc("kafka_consume_recent"))
     def kafka_consume_recent(topic: str, partition: int, max_messages: int | None = None) -> str:
-        """Read up to N recent messages from a single partition (byte + count caps)."""
         return kafka_tools.kafka_consume_recent(cfg, topic, partition, max_messages)
 
     if cfg.allow_produce:
@@ -247,9 +233,8 @@ def _register_prometheus(
 ) -> None:
     default_topic = prom.kafka_metrics_topic
 
-    @mcp.tool()
+    @mcp.tool(description=tool_doc("prometheus_mcp_guide"))
     def prometheus_mcp_guide() -> str:
-        """Справка: как вызывать MCP Prometheus (не путать с /metrics SDocsMCP)."""
         export_tools = (
             ["prometheus_export_instant_to_kafka"]
             if kafka and kafka.enabled and kafka.allow_produce
@@ -295,24 +280,20 @@ def _register_prometheus(
             ensure_ascii=False,
         )
 
-    @mcp.tool()
+    @mcp.tool(description=tool_doc("prometheus_query_instant"))
     def prometheus_query_instant(query: str, at_time: str | None = None) -> str:
-        """Instant PromQL к modules.prometheus.base_url (/api/v1/query). Не /metrics SDocsMCP."""
         return prometheus_tools.prometheus_query_instant(prom, query, at_time)
 
-    @mcp.tool()
+    @mcp.tool(description=tool_doc("prometheus_query_range"))
     def prometheus_query_range(query: str, start: str, end: str, step: str) -> str:
-        """Range PromQL (/api/v1/query_range) к удалённому Prometheus."""
         return prometheus_tools.prometheus_query_range(prom, query, start, end, step)
 
-    @mcp.tool()
+    @mcp.tool(description=tool_doc("prometheus_targets"))
     def prometheus_targets(state: str | None = None) -> str:
-        """Цели scrape (/api/v1/targets) удалённого Prometheus."""
         return prometheus_tools.prometheus_targets(prom, state)
 
-    @mcp.tool()
+    @mcp.tool(description=tool_doc("prometheus_metadata"))
     def prometheus_metadata(metric: str | None = None) -> str:
-        """Метаданные метрик (/api/v1/metadata)."""
         return prometheus_tools.prometheus_metadata(prom, metric)
 
     @mcp.tool()
@@ -324,19 +305,16 @@ def _register_prometheus(
         """Серии по match[] (/api/v1/series)."""
         return prometheus_tools.prometheus_series(prom, match_queries, start, end)
 
-    @mcp.tool()
+    @mcp.tool(description=tool_doc("prometheus_labels"))
     def prometheus_labels() -> str:
-        """Имена лейблов (/api/v1/labels)."""
         return prometheus_tools.prometheus_labels(prom)
 
-    @mcp.tool()
+    @mcp.tool(description=tool_doc("prometheus_rules"))
     def prometheus_rules() -> str:
-        """Recording/alerting rules (/api/v1/rules)."""
         return prometheus_tools.prometheus_rules(prom)
 
-    @mcp.tool()
+    @mcp.tool(description=tool_doc("prometheus_alerts"))
     def prometheus_alerts() -> str:
-        """Активные алерты (/api/v1/alerts)."""
         return prometheus_tools.prometheus_alerts(prom)
 
     if kafka and kafka.enabled and kafka.allow_produce:
@@ -406,24 +384,20 @@ def _register_opensearch(mcp: FastMCP, cfg: OpenSearchModuleConfig) -> None:
         """Explain why a shard is (or is not) allocated."""
         return opensearch_tools.opensearch_allocation_explain(cfg, index, shard, primary)
 
-    @mcp.tool()
+    @mcp.tool(description=tool_doc("opensearch_list_indices"))
     def opensearch_list_indices(pattern: str = "*") -> str:
-        """cat indices (JSON) with pattern."""
         return opensearch_tools.opensearch_list_indices(cfg, pattern)
 
-    @mcp.tool()
+    @mcp.tool(description=tool_doc("opensearch_get_mapping"))
     def opensearch_get_mapping(index: str) -> str:
-        """Get index mapping JSON."""
         return opensearch_tools.opensearch_get_mapping(cfg, index)
 
-    @mcp.tool()
+    @mcp.tool(description=tool_doc("opensearch_search"))
     def opensearch_search(index: str, query_json: str) -> str:
-        """Поиск: query_json — строка JSON DSL (не query). Пример: {"query":{"match_all":{}}}."""
         return opensearch_tools.opensearch_search(cfg, index, query_json)
 
-    @mcp.tool()
+    @mcp.tool(description=tool_doc("opensearch_count"))
     def opensearch_count(index: str, query_json: str | None = None) -> str:
-        """Count docs; optional query JSON filter."""
         return opensearch_tools.opensearch_count(cfg, index, query_json)
 
     if cfg.allow_write:

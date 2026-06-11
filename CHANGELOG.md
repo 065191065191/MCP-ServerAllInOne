@@ -5,6 +5,30 @@
 
 ## [Unreleased]
 
+## [0.7.2] — 2026-06-11
+
+### Добавлено
+
+- **`docs/LLM_SYSTEM_PROMPT.md`** и поле **`llm_system_prompt`** в `sdocs_mcp_capabilities`.
+
+### Изменено
+
+- **S3 MCP:** лимит `s3_put_object` по умолчанию **1 МБ** (`max_put_bytes: 1048576`).
+- UI: явное пояснение, что запись/удаление выключены до чекбоксов в Консоли.
+
+## [0.7.1] — 2026-06-11
+
+### Добавлено
+
+- **Развёрнутые описания MCP tools** для LLM (`mcp_tool_docs.py`): Prometheus, OpenSearch, Kafka, Postgres — сценарии наблюдаемости.
+- **s3-mcp:** tools `s3_put_object`, `s3_delete_object` (выкл. по умолчанию).
+- **UI:** вкладка MCP → S3 MCP — включение `allow_put` / `allow_delete` в `mcp.conf` (`/api/s3-mcp/policy`).
+
+### Изменено
+
+- `sdocs_mcp_capabilities` содержит поле `mission` и расширенные `workflows`.
+- `modules.s3_mcp` в YAML и `config.example.yaml`.
+
 ## [0.7.0] — 2026-06-08
 
 ### Добавлено

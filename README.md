@@ -68,6 +68,7 @@
 | [`docs/INSTALL_AND_RELEASE.md`](docs/INSTALL_AND_RELEASE.md) | Релизные архивы и установка |
 | [`s3-mcp/README.md`](s3-mcp/README.md) | **S3 MCP**: env, tools, curl |
 | [`docs/S3_MCP.md`](docs/S3_MCP.md) | Описание S3 MCP и `s3_object_metadata` |
+| [`docs/LLM_SYSTEM_PROMPT.md`](docs/LLM_SYSTEM_PROMPT.md) | **System prompt для LLM** (также в `sdocs_mcp_capabilities`) |
 | [`deploy/README.md`](deploy/README.md) | Промышленный деплой |
 
 ---

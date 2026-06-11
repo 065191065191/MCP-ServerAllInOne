@@ -28,6 +28,7 @@ from sdocs_mcp.backend_tls import (
     prometheus_httpx_verify_and_cert,
 )
 from sdocs_mcp.config import AppConfig, config_path_for_display, load_config
+from sdocs_mcp.config_yaml_patch import patch_modules_s3_mcp
 from sdocs_mcp.executive_dashboard_html import DASHBOARD_HTML
 from sdocs_mcp.ui_alerts_page import ALERTS_PAGE_HTML
 from sdocs_mcp.ui_cron_page import CRON_PAGE_HTML
@@ -111,7 +112,7 @@ async def _app_lifespan(_application: FastAPI):
         stop_prometheus_metrics_cron()
 
 
-app = FastAPI(title="SDocsMCP UI", version="0.7.0", lifespan=_app_lifespan)
+app = FastAPI(title="SDocsMCP UI", version="0.7.2", lifespan=_app_lifespan)
 web_router = APIRouter()
 pages_router = APIRouter()
 
@@ -901,6 +902,63 @@ async def api_alerts_rules_post(req: Request, body: dict[str, Any]) -> JSONRespo
         _record_request_timing(started, ok)
 
 
+@web_router.get("/api/s3-mcp/policy")
+async def api_s3_mcp_policy_get(req: Request) -> JSONResponse:
+    """Политика опасных tools s3-mcp (modules.s3_mcp в mcp.conf)."""
+    started = time.perf_counter()
+    ok = False
+    try:
+        _secure_api(req, "s3_mcp_policy_get")
+        cfg = _cfg()
+        p = cfg.modules.s3_mcp
+        ok = True
+        return JSONResponse(
+            {
+                "allow_put": p.allow_put,
+                "allow_delete": p.allow_delete,
+                "max_put_bytes": p.max_put_bytes,
+                "max_put_human": "1 МБ" if p.max_put_bytes == 1_048_576 else f"{p.max_put_bytes} bytes",
+                "tools_when_enabled": {
+                    "s3_put_object": p.allow_put,
+                    "s3_delete_object": p.allow_delete,
+                },
+                "note": (
+                    "После сохранения s3-mcp перезапустится (S3_MCP_CONFIG_RELOAD_INTERVAL) "
+                    "или перезапустите под вручную."
+                ),
+            }
+        )
+    finally:
+        _record_request_timing(started, ok)
+
+
+@web_router.post("/api/s3-mcp/policy")
+async def api_s3_mcp_policy_post(req: Request, body: dict[str, Any]) -> JSONResponse:
+    started = time.perf_counter()
+    ok = False
+    try:
+        _secure_api(req, "s3_mcp_policy_post")
+        allow_put = body.get("allow_put")
+        allow_delete = body.get("allow_delete")
+        if allow_put is None and allow_delete is None:
+            raise HTTPException(status_code=400, detail="allow_put or allow_delete required")
+        try:
+            result = patch_modules_s3_mcp(
+                allow_put=bool(allow_put) if allow_put is not None else None,
+                allow_delete=bool(allow_delete) if allow_delete is not None else None,
+            )
+        except FileNotFoundError as e:
+            raise HTTPException(status_code=404, detail=str(e)) from e
+        try:
+            refresh_config_state_from_disk()
+        except Exception:
+            pass
+        ok = True
+        return JSONResponse({"ok": True, **result})
+    finally:
+        _record_request_timing(started, ok)
+
+
 @web_router.get("/api/config-path")
 async def api_config_path(req: Request) -> JSONResponse:
     started = time.perf_counter()
@@ -1608,6 +1666,20 @@ _OPS_HTML_RAW = """<!DOCTYPE html>
         <button type="button" id="btn-tools">Загрузить список tools</button>
       </div>
       <pre id="tools">—</pre>
+      <h2 class="section-title" style="margin-top:1.25rem;">S3 MCP — запись и удаление (выкл. по умолчанию)</h2>
+      <p class="section-note">
+        Отдельный процесс <code>s3-mcp</code> (порт <strong>8766</strong>), не путать с <code>sdocs-mcp</code>.
+        <strong>Сейчас по умолчанию</strong> в MCP доступны только чтение: список bucket, метаданные файла (<code>s3_object_metadata</code>), статистика.
+        <strong>Запись файла до 1&nbsp;МБ</strong> (<code>s3_put_object</code>) и <strong>удаление</strong> (<code>s3_delete_object</code>) — <em>отключены</em>, пока не включите чекбоксы ниже и не нажмёте «Сохранить».
+        После сохранения в <code>mcp.conf</code> под <code>s3-mcp</code> перезапустится (≈15&nbsp;с) и в <code>tools/list</code> появятся новые tools.
+      </p>
+      <div class="row" style="gap:1rem;align-items:center;margin-bottom:0.75rem;flex-wrap:wrap;">
+        <label><input type="checkbox" id="s3-allow-put"> <strong>allow_put</strong> — разрешить <code>s3_put_object</code> (файл в base64, макс. 1&nbsp;МБ)</label>
+        <label><input type="checkbox" id="s3-allow-delete"> <strong>allow_delete</strong> — разрешить <code>s3_delete_object</code></label>
+        <button type="button" id="btn-s3-policy-save">Сохранить в mcp.conf</button>
+        <button type="button" id="btn-s3-policy-load">Обновить</button>
+      </div>
+      <pre id="s3-policy-out">—</pre>
       <h2 class="section-title" style="margin-top:1.25rem;">Вызовы из UI (allowlist)</h2>
       <p class="section-note">Кнопки дергают <code>FastMCP.call_tool</code> на сервере (нужен <code>SDOCS_MCP_UI_ENABLE_INVOKE=true</code>). <strong>Seed</strong> — <code>SDOCS_MCP_UI_ENABLE_SEED=true</code>.</p>
       <div class="btn-row">
@@ -1820,6 +1892,23 @@ _OPS_HTML_RAW = """<!DOCTYPE html>
         err.textContent = String(e);
       });
       $('btn-tools').onclick = () => loadTools().catch(e => alert(e));
+      async function loadS3Policy() {
+        const p = await jget('/api/s3-mcp/policy');
+        $('s3-allow-put').checked = !!p.allow_put;
+        $('s3-allow-delete').checked = !!p.allow_delete;
+        $('s3-policy-out').textContent = JSON.stringify(p, null, 2);
+      }
+      async function saveS3Policy() {
+        const body = {
+          allow_put: $('s3-allow-put').checked,
+          allow_delete: $('s3-allow-delete').checked,
+        };
+        const r = await jpost('/api/s3-mcp/policy', body);
+        $('s3-policy-out').textContent = JSON.stringify(r, null, 2);
+      }
+      $('btn-s3-policy-load').onclick = () => loadS3Policy().catch(e => { $('s3-policy-out').textContent = String(e); });
+      $('btn-s3-policy-save').onclick = () => saveS3Policy().catch(e => { $('s3-policy-out').textContent = String(e); });
+      loadS3Policy().catch(() => {});
       $('btn-seed').onclick = () => seed().catch(e => { $('invoke-out').textContent = 'Ошибка: ' + e; });
       $('btn-mail-test').onclick = () => mailTest().catch(e => { $('invoke-out').textContent = 'Ошибка: ' + e; });
       $('btn-metrics').onclick = () => refreshMetricsPreview().catch(e => { $('metrics-preview').textContent = String(e); });
