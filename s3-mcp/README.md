@@ -111,4 +111,4 @@ curl -sS -N "$BASE" -H "Content-Type: application/json" -H "Accept: application/
 
 ## Версия
 
-**0.1.0** — тег `s3-mcp-v0.1.0`
+**0.7.0** — тег **`v0.7.0`** (общий с репозиторием, как `v0.6.14`)

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sdocs-mcp"
-version = "0.6.14"
+version = "0.7.0"
 description = "SDocsMCP + S3 MCP — MCP по HTTP: OpenSearch, Kafka, Postgres, Redis, Prometheus, SSH, почта, S3/Ceph"
 readme = "README.md"
 authors = [{ name = "Gos Stepan Ulievich" }]
