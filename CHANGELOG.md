@@ -5,6 +5,25 @@
 
 ## [Unreleased]
 
+## [0.7.3] — 2026-06-12
+
+### Добавлено
+
+- **Алертинг по логам OpenSearch в UI** (`/alerts-page`): редактор правил с полями **индекс**, **запрос** (`query_string`), **условие** (`count_threshold` — количество ≥ порога, или `no_logs` — отсутствие логов за окно), окно, поле времени, вкл/выкл, редактирование и удаление правил.
+- **Доставка сработавших алертов** (`src/sdocs_mcp/alerts_notify.py`): каналы **email** (через `modules.mail`), **webhook** (POST JSON), **telegram**; канал и получатель задаются глобально (`modules.alerting.notify`) и переопределяются в правиле (`notify_channel` / `notify_target`).
+- **Журнал доставки** в UI и эндпойнт **`GET /api/alerts/notify-log`**: успех/ошибка, канал, получатель, длительность; логирование в `sdocs_mcp.alerts_notify` (INFO/WARNING).
+- Конфиг **`modules.alerting.notify`** (`default_channel`, `webhook_url`, `telegram_bot_token_env`, `telegram_chat_id`) — в `config.example.yaml`.
+- Документация: [`docs/ALERTING.md`](docs/ALERTING.md).
+
+### Изменено
+
+- Проверки и доставка выполняются **только лидером** (consumer-group на `sdocs.alerts.lock`) — без дублей уведомлений при нескольких подах. **Новые Kafka-топики не вводятся**.
+
+### Исправлено
+
+- **Утечка соединений (причина OOM):** клиенты **OpenSearch** создавались на каждый вызов и не закрывались — теперь контекст `opensearch_client()` / `close_opensearch_client()` гарантированно освобождает пул `urllib3` во всех tools, RAG, аудите вызовов, фоновой оценке алертов и UI-проверках.
+- **s3-mcp:** HTTP-ответы `urllib` (HEAD/PUT/DELETE/GET) теперь явно закрываются — устранена утечка сокетов в долгоживущем процессе.
+
 ## [0.7.2] — 2026-06-11
 
 ### Добавлено

@@ -12,7 +12,7 @@ from typing import Any
 from opensearchpy.exceptions import OpenSearchException
 
 from sdocs_mcp.config import OpenSearchModuleConfig, OpenSearchToolCallAuditConfig
-from sdocs_mcp.opensearch_tools import connect_opensearch
+from sdocs_mcp.opensearch_tools import close_opensearch_client, connect_opensearch
 from sdocs_mcp.tool_audit_http_context import current_http_caller_hints
 
 log = logging.getLogger("sdocs_mcp.tool_audit")
@@ -299,8 +299,8 @@ def audit_log_tool_invocation_sync(
     }
 
     client = connect_opensearch(os_cfg)
-    _ensure_tool_audit_index(client, idx, aud.auto_create_index)
     try:
+        _ensure_tool_audit_index(client, idx, aud.auto_create_index)
         client.index(
             index=idx,
             id=str(uuid.uuid4()),
@@ -309,3 +309,5 @@ def audit_log_tool_invocation_sync(
         )
     except OpenSearchException as e:
         log.warning("OpenSearch tool audit index failed: %s", e)
+    finally:
+        close_opensearch_client(client)

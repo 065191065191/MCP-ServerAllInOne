@@ -13,7 +13,8 @@ from typing import Any
 from kafka import KafkaConsumer, KafkaProducer
 
 from sdocs_mcp.alerts_evaluator import run_leader_evaluation_tick
-from sdocs_mcp.alerts_store import apply_payload, snapshot
+from sdocs_mcp.alerts_notify import deliver_alert
+from sdocs_mcp.alerts_store import apply_payload, list_rules, snapshot
 from sdocs_mcp.alerts_kafka_resolve import alerts_kafka_ready, resolve_alerts_kafka
 from sdocs_mcp.config import AppConfig, load_config
 from sdocs_mcp.config_runtime import refresh_config_state_from_disk
@@ -120,6 +121,15 @@ def _leader_loop() -> None:
             time.sleep(10)
 
 
+def _rule_by_id(rule_id: str | None) -> dict[str, Any] | None:
+    if not rule_id:
+        return None
+    for r in list_rules():
+        if str(r.get("id") or "") == str(rule_id):
+            return r
+    return None
+
+
 def _evaluator_tick(cfg: AppConfig) -> None:
     try:
         cfg = refresh_config_state_from_disk()
@@ -128,8 +138,22 @@ def _evaluator_tick(cfg: AppConfig) -> None:
     events = run_leader_evaluation_tick(cfg)
     if not events:
         return
+    snap = snapshot()
+    groups = snap.get("groups") if isinstance(snap.get("groups"), list) else []
+    for ev in events:
+        rule = _rule_by_id(ev.get("rule_id"))
+        if rule is None:
+            rule = {"name": ev.get("rule_name"), "id": ev.get("rule_id")}
+        deliver_alert(
+            cfg,
+            rule,
+            ev,
+            groups=groups,
+            instance_id=_instance_id,
+        )
     k, _ = resolve_alerts_kafka(cfg)
-    assert k is not None
+    if k is None:
+        return
     prod = KafkaProducer(**kafka_broker_client_config(k))
     try:
         for ev in events:

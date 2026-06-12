@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any
 
 from opensearchpy import OpenSearch
@@ -27,89 +29,118 @@ def _client(cfg: OpenSearchModuleConfig) -> OpenSearch:
     return OpenSearch(**kw)
 
 
+def close_opensearch_client(client: OpenSearch | None) -> None:
+    """Закрыть пул соединений клиента (urllib3) — иначе утечка сокетов/памяти."""
+    if client is None:
+        return
+    try:
+        client.close()
+    except Exception:
+        pass
+
+
+@contextmanager
+def opensearch_client(cfg: OpenSearchModuleConfig) -> Iterator[OpenSearch]:
+    """
+    Контекст с гарантированным закрытием клиента OpenSearch.
+
+    Клиент создаётся на вызов; без close() пул urllib3 остаётся открытым
+    и при частых вызовах (tools, проверки статуса, аудит) ведёт к OOM.
+    """
+    client = _client(cfg)
+    try:
+        yield client
+    finally:
+        close_opensearch_client(client)
+
+
 def connect_opensearch(cfg: OpenSearchModuleConfig) -> OpenSearch:
-    """Клиент OpenSearch с учётом mtls_* из конфига (для UI и тестов)."""
+    """
+    Клиент OpenSearch (для UI/тестов). ВНИМАНИЕ: вызывающий обязан закрыть его
+    через close_opensearch_client() / client.close(), иначе течёт пул соединений.
+    Предпочтительно использовать контекст opensearch_client(cfg).
+    """
     return _client(cfg)
 
 
 def opensearch_cluster_health(cfg: OpenSearchModuleConfig) -> str:
-    client = _client(cfg)
-    try:
-        return json.dumps(client.cluster.health(), indent=2)
-    except OpenSearchException as e:
-        return json.dumps({"error": str(e)}, indent=2)
+    with opensearch_client(cfg) as client:
+        try:
+            return json.dumps(client.cluster.health(), indent=2)
+        except OpenSearchException as e:
+            return json.dumps({"error": str(e)}, indent=2)
 
 
 def opensearch_cluster_health_debug(cfg: OpenSearchModuleConfig) -> str:
     """Extended health payload with pending tasks and shard view."""
-    client = _client(cfg)
-    try:
-        health = client.cluster.health(level="shards")
-        pending = client.cluster.pending_tasks()
-        shards = client.cat.shards(
-            format="json",
-            h="index,shard,prirep,state,docs,store,node,unassigned.reason",
-        )
-        return json.dumps(
-            {
-                "health": health,
-                "pending_tasks": pending,
-                "shards": shards,
-            },
-            indent=2,
-            default=str,
-        )
-    except OpenSearchException as e:
-        return json.dumps({"error": str(e)}, indent=2)
+    with opensearch_client(cfg) as client:
+        try:
+            health = client.cluster.health(level="shards")
+            pending = client.cluster.pending_tasks()
+            shards = client.cat.shards(
+                format="json",
+                h="index,shard,prirep,state,docs,store,node,unassigned.reason",
+            )
+            return json.dumps(
+                {
+                    "health": health,
+                    "pending_tasks": pending,
+                    "shards": shards,
+                },
+                indent=2,
+                default=str,
+            )
+        except OpenSearchException as e:
+            return json.dumps({"error": str(e)}, indent=2)
 
 
 def opensearch_cluster_stats(cfg: OpenSearchModuleConfig) -> str:
-    client = _client(cfg)
-    try:
-        return json.dumps(client.cluster.stats(), indent=2, default=str)
-    except OpenSearchException as e:
-        return json.dumps({"error": str(e)}, indent=2)
+    with opensearch_client(cfg) as client:
+        try:
+            return json.dumps(client.cluster.stats(), indent=2, default=str)
+        except OpenSearchException as e:
+            return json.dumps({"error": str(e)}, indent=2)
 
 
 def opensearch_nodes_stats(cfg: OpenSearchModuleConfig) -> str:
-    client = _client(cfg)
-    try:
-        stats = client.nodes.stats(metric="os,jvm,process,fs,indices,thread_pool,transport,http")
-        return json.dumps(stats, indent=2, default=str)
-    except OpenSearchException as e:
-        return json.dumps({"error": str(e)}, indent=2)
+    with opensearch_client(cfg) as client:
+        try:
+            stats = client.nodes.stats(metric="os,jvm,process,fs,indices,thread_pool,transport,http")
+            return json.dumps(stats, indent=2, default=str)
+        except OpenSearchException as e:
+            return json.dumps({"error": str(e)}, indent=2)
 
 
 def opensearch_pending_tasks(cfg: OpenSearchModuleConfig) -> str:
-    client = _client(cfg)
-    try:
-        return json.dumps(client.cluster.pending_tasks(), indent=2, default=str)
-    except OpenSearchException as e:
-        return json.dumps({"error": str(e)}, indent=2)
+    with opensearch_client(cfg) as client:
+        try:
+            return json.dumps(client.cluster.pending_tasks(), indent=2, default=str)
+        except OpenSearchException as e:
+            return json.dumps({"error": str(e)}, indent=2)
 
 
 def opensearch_cluster_settings(cfg: OpenSearchModuleConfig) -> str:
-    client = _client(cfg)
-    try:
-        settings = client.cluster.get_settings(include_defaults=True)
-        return json.dumps(settings, indent=2, default=str)
-    except OpenSearchException as e:
-        return json.dumps({"error": str(e)}, indent=2)
+    with opensearch_client(cfg) as client:
+        try:
+            settings = client.cluster.get_settings(include_defaults=True)
+            return json.dumps(settings, indent=2, default=str)
+        except OpenSearchException as e:
+            return json.dumps({"error": str(e)}, indent=2)
 
 
 def opensearch_cat_shards(cfg: OpenSearchModuleConfig, index: str = "*") -> str:
     if not index or len(index) > 200:
         raise ValueError("index must be 1..200 characters")
-    client = _client(cfg)
-    try:
-        shards = client.cat.shards(
-            index=index,
-            format="json",
-            h="index,shard,prirep,state,docs,store,node,unassigned.reason",
-        )
-        return json.dumps(shards, indent=2, default=str)
-    except OpenSearchException as e:
-        return json.dumps({"error": str(e)}, indent=2)
+    with opensearch_client(cfg) as client:
+        try:
+            shards = client.cat.shards(
+                index=index,
+                format="json",
+                h="index,shard,prirep,state,docs,store,node,unassigned.reason",
+            )
+            return json.dumps(shards, indent=2, default=str)
+        except OpenSearchException as e:
+            return json.dumps({"error": str(e)}, indent=2)
 
 
 def opensearch_allocation_explain(
@@ -118,7 +149,6 @@ def opensearch_allocation_explain(
     shard: int | None = None,
     primary: bool | None = None,
 ) -> str:
-    client = _client(cfg)
     body: dict[str, Any] = {}
     if index is not None:
         if not index or len(index) > 200:
@@ -130,35 +160,36 @@ def opensearch_allocation_explain(
         body["shard"] = shard
     if primary is not None:
         body["primary"] = primary
-    try:
-        if body:
-            resp = client.cluster.allocation_explain(body=body)
-        else:
-            resp = client.cluster.allocation_explain()
-        return json.dumps(resp, indent=2, default=str)
-    except OpenSearchException as e:
-        return json.dumps({"error": str(e)}, indent=2)
+    with opensearch_client(cfg) as client:
+        try:
+            if body:
+                resp = client.cluster.allocation_explain(body=body)
+            else:
+                resp = client.cluster.allocation_explain()
+            return json.dumps(resp, indent=2, default=str)
+        except OpenSearchException as e:
+            return json.dumps({"error": str(e)}, indent=2)
 
 
 def opensearch_list_indices(cfg: OpenSearchModuleConfig, pattern: str = "*") -> str:
     if not pattern or len(pattern) > 200:
         raise ValueError("pattern must be 1..200 characters")
-    client = _client(cfg)
-    try:
-        indices = client.cat.indices(index=pattern, format="json", h="index,health,status,docs.count,store.size")
-        return json.dumps(indices, indent=2, default=str)
-    except OpenSearchException as e:
-        return json.dumps({"error": str(e)}, indent=2)
+    with opensearch_client(cfg) as client:
+        try:
+            indices = client.cat.indices(index=pattern, format="json", h="index,health,status,docs.count,store.size")
+            return json.dumps(indices, indent=2, default=str)
+        except OpenSearchException as e:
+            return json.dumps({"error": str(e)}, indent=2)
 
 
 def opensearch_get_mapping(cfg: OpenSearchModuleConfig, index: str) -> str:
     if not index or len(index) > 200:
         raise ValueError("index must be 1..200 characters")
-    client = _client(cfg)
-    try:
-        return json.dumps(client.indices.get_mapping(index=index), indent=2)
-    except OpenSearchException as e:
-        return json.dumps({"error": str(e)}, indent=2)
+    with opensearch_client(cfg) as client:
+        try:
+            return json.dumps(client.indices.get_mapping(index=index), indent=2)
+        except OpenSearchException as e:
+            return json.dumps({"error": str(e)}, indent=2)
 
 
 def opensearch_search(cfg: OpenSearchModuleConfig, index: str, query_json: str) -> str:
@@ -173,12 +204,12 @@ def opensearch_search(cfg: OpenSearchModuleConfig, index: str, query_json: str) 
     size = int(body.get("size", 10))
     cap = max(1, min(cfg.search_max_size, 100))
     body["size"] = min(size, cap)
-    client = _client(cfg)
-    try:
-        resp = client.search(index=index, body=body)
-        return json.dumps(resp, indent=2, default=str)
-    except OpenSearchException as e:
-        return json.dumps({"error": str(e)}, indent=2)
+    with opensearch_client(cfg) as client:
+        try:
+            resp = client.search(index=index, body=body)
+            return json.dumps(resp, indent=2, default=str)
+        except OpenSearchException as e:
+            return json.dumps({"error": str(e)}, indent=2)
 
 
 def opensearch_count(cfg: OpenSearchModuleConfig, index: str, query_json: str | None = None) -> str:
@@ -193,15 +224,15 @@ def opensearch_count(cfg: OpenSearchModuleConfig, index: str, query_json: str | 
         if not isinstance(parsed, dict):
             raise ValueError("query_json must be a JSON object")
         body = parsed
-    client = _client(cfg)
-    try:
-        if body is None:
-            resp = client.count(index=index)
-        else:
-            resp = client.count(index=index, body=body)
-        return json.dumps(resp, indent=2, default=str)
-    except OpenSearchException as e:
-        return json.dumps({"error": str(e)}, indent=2)
+    with opensearch_client(cfg) as client:
+        try:
+            if body is None:
+                resp = client.count(index=index)
+            else:
+                resp = client.count(index=index, body=body)
+            return json.dumps(resp, indent=2, default=str)
+        except OpenSearchException as e:
+            return json.dumps({"error": str(e)}, indent=2)
 
 
 def opensearch_delete_index(cfg: OpenSearchModuleConfig, index: str) -> str:
@@ -209,9 +240,9 @@ def opensearch_delete_index(cfg: OpenSearchModuleConfig, index: str) -> str:
         raise PermissionError("destructive OpenSearch operations are disabled (allow_write: false)")
     if not index or len(index) > 200:
         raise ValueError("index must be 1..200 characters")
-    client = _client(cfg)
-    try:
-        resp = client.indices.delete(index=index, ignore_unavailable=True)
-        return json.dumps(resp, indent=2, default=str)
-    except OpenSearchException as e:
-        return json.dumps({"error": str(e)}, indent=2)
+    with opensearch_client(cfg) as client:
+        try:
+            resp = client.indices.delete(index=index, ignore_unavailable=True)
+            return json.dumps(resp, indent=2, default=str)
+        except OpenSearchException as e:
+            return json.dumps({"error": str(e)}, indent=2)

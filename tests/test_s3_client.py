@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import urllib.error
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -61,14 +61,13 @@ def test_build_headers_v4_has_authorization() -> None:
 def test_get_object_metadata_exists() -> None:
     cfg = S3Config(endpoint="http://localhost:9000", access_key="a", secret_key="b")
     client = S3Client(cfg)
-    mock_resp = MagicMock()
-    mock_resp.headers = {
+    headers = {
         "Content-Length": "1024",
         "Last-Modified": "Mon, 01 Jan 2026 12:00:00 GMT",
         "ETag": '"abc123"',
         "Content-Type": "application/pdf",
     }
-    with patch.object(client, "_head_response", return_value=(mock_resp, None, None)):
+    with patch.object(client, "_head_response", return_value=(headers, None, None)):
         meta = client.get_object_metadata("docs", "report.pdf")
     assert meta["exists"] is True
     assert meta["size_bytes"] == 1024

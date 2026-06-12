@@ -10,7 +10,7 @@ from typing import Any
 from sdocs_mcp.alerts_mcp_sources import module_enabled
 from sdocs_mcp.alerts_store import list_rules
 from sdocs_mcp.config import AppConfig
-from sdocs_mcp.opensearch_tools import connect_opensearch, opensearch_cluster_health
+from sdocs_mcp.opensearch_tools import close_opensearch_client, connect_opensearch, opensearch_cluster_health
 
 # rule_id → last_fire_unix
 _fire_cooldown: dict[str, float] = {}
@@ -19,18 +19,46 @@ RuleUiState = str  # inactive | ok | error | firing
 
 
 def _parse_opensearch_params(params: str) -> dict[str, str]:
-    """index ms-logs; query level:ERROR AND message:*404*"""
+    """index ms-logs; query level:ERROR AND message:*404* (legacy строка params)."""
     out: dict[str, str] = {}
     s = (params or "").strip()
     if not s:
         return out
-    m = re.search(r"index\s+(\S+)", s, re.I)
+    m = re.search(r"index\s+([\w.*-]+)", s, re.I)
     if m:
-        out["index"] = m.group(1)
+        out["index"] = m.group(1).rstrip(";,")
     m = re.search(r"query\s+(.+)$", s, re.I)
     if m:
         out["query"] = m.group(1).strip()
     return out
+
+
+def resolve_opensearch_rule_fields(rule: dict[str, Any]) -> dict[str, Any]:
+    """
+    Нормализованные поля OpenSearch-правила для UI и evaluator.
+    Явные rule.index / rule.query имеют приоритет над legacy params.
+    """
+    legacy = _parse_opensearch_params(str(rule.get("params") or rule.get("source") or ""))
+    index = str(rule.get("index") or legacy.get("index") or "*").strip() or "*"
+    query = str(rule.get("query") or legacy.get("query") or "level:ERROR").strip() or "level:ERROR"
+    condition = str(rule.get("condition") or "count_threshold").strip().lower()
+    if condition not in ("count_threshold", "no_logs"):
+        condition = "count_threshold"
+    time_field = str(rule.get("time_field") or "@timestamp").strip() or "@timestamp"
+    return {
+        "index": index,
+        "query": query,
+        "condition": condition,
+        "time_field": time_field,
+        "window_hours": float(rule.get("window_hours") or 1),
+        "threshold": int(rule.get("threshold") or 2),
+    }
+
+
+def rule_enabled(rule: dict[str, Any]) -> bool:
+    if "enabled" not in rule:
+        return True
+    return bool(rule.get("enabled"))
 
 
 def mcp_source_health(cfg: AppConfig, source_id: str) -> dict[str, Any]:
@@ -90,39 +118,66 @@ def mcp_source_health(cfg: AppConfig, source_id: str) -> dict[str, Any]:
     return {"state": "inactive", "label": "нет проверки", "detail": "источник без health probe"}
 
 
-def _eval_opensearch_rule(cfg: AppConfig, rule: dict[str, Any]) -> dict[str, Any]:
-    p = _parse_opensearch_params(str(rule.get("params") or rule.get("source") or ""))
-    index = p.get("index", "*")
-    q = p.get("query", "level:ERROR")
-    window_h = float(rule.get("window_hours") or 1)
-    threshold = int(rule.get("threshold") or 2)
+def _opensearch_log_count(cfg: AppConfig, fields: dict[str, Any]) -> int:
+    index = fields["index"]
+    q = fields["query"]
+    window_h = fields["window_hours"]
+    time_field = fields["time_field"]
     client = connect_opensearch(cfg.modules.opensearch)
     body = {
         "size": 0,
         "query": {
             "bool": {
                 "must": [{"query_string": {"query": q}}],
-                "filter": [{"range": {"@timestamp": {"gte": f"now-{int(window_h)}h"}}}],
+                "filter": [{"range": {time_field: {"gte": f"now-{max(1, int(window_h))}h"}}}],
             }
         },
     }
-    if index != "*":
-        resp = client.search(index=index, body=body)
-    else:
-        resp = client.search(index="*", body=body)
+    try:
+        resp = client.search(index=index if index != "*" else "*", body=body)
+    finally:
+        close_opensearch_client(client)
     total = resp.get("hits", {}).get("total", {})
-    count = total.get("value", total) if isinstance(total, dict) else int(total or 0)
-    fired = count >= threshold
+    return int(total.get("value", total) if isinstance(total, dict) else int(total or 0))
+
+
+def _eval_opensearch_rule(cfg: AppConfig, rule: dict[str, Any]) -> dict[str, Any]:
+    fields = resolve_opensearch_rule_fields(rule)
+    count = _opensearch_log_count(cfg, fields)
+    condition = fields["condition"]
+    threshold = fields["threshold"]
+    window_h = fields["window_hours"]
+
+    if condition == "no_logs":
+        fired = count == 0
+        detail = (
+            f"нет логов по запросу за {window_h}ч (найдено {count})"
+            if fired
+            else f"{count} hits за {window_h}ч — условие «нет логов» не выполнено"
+        )
+    else:
+        fired = count >= threshold
+        detail = f"{count} hits за {window_h}ч (порог ≥{threshold})"
+
     return {
         "ok": True,
         "count": count,
         "threshold": threshold,
+        "condition": condition,
+        "index": fields["index"],
+        "query": fields["query"],
         "fired": fired,
-        "detail": f"{count} hits за {window_h}ч (порог {threshold})",
+        "detail": detail,
     }
 
 
 def evaluate_rule(cfg: AppConfig, rule: dict[str, Any]) -> dict[str, Any]:
+    if not rule_enabled(rule):
+        return {
+            "ui_state": "inactive",
+            "health": {"state": "inactive", "label": "выкл.", "detail": "правило отключено"},
+            "evaluation": None,
+        }
     src = str(rule.get("mcp_source") or "").strip().lower()
     health = mcp_source_health(cfg, src)
     if health["state"] == "inactive":
@@ -151,11 +206,18 @@ def rule_ui_statuses(cfg: AppConfig) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for rule in list_rules():
         st = evaluate_rule(cfg, rule)
+        fields = resolve_opensearch_rule_fields(rule) if str(rule.get("mcp_source") or "").lower() == "opensearch" else {}
         rows.append(
             {
                 "id": rule.get("id"),
                 "name": rule.get("name"),
                 "mcp_source": rule.get("mcp_source"),
+                "enabled": rule_enabled(rule),
+                "index": fields.get("index"),
+                "query": fields.get("query"),
+                "condition": fields.get("condition"),
+                "notify_channel": rule.get("notify_channel"),
+                "notify_target": rule.get("notify_target"),
                 "ui_state": st["ui_state"],
                 "health": st["health"],
                 "evaluation": st.get("evaluation"),
@@ -184,6 +246,7 @@ def run_leader_evaluation_tick(cfg: AppConfig) -> list[dict[str, Any]]:
             continue
         if not should_emit_alert(rule):
             continue
+        ev_body = st.get("evaluation") or {}
         events.append(
             {
                 "type": "alert_fired",
@@ -191,7 +254,11 @@ def run_leader_evaluation_tick(cfg: AppConfig) -> list[dict[str, Any]]:
                 "rule_name": rule.get("name"),
                 "mcp_source": rule.get("mcp_source"),
                 "group_id": rule.get("group_id"),
-                "detail": (st.get("evaluation") or {}).get("detail"),
+                "index": ev_body.get("index") or rule.get("index"),
+                "query": ev_body.get("query") or rule.get("query"),
+                "notify_channel": rule.get("notify_channel"),
+                "notify_target": rule.get("notify_target"),
+                "detail": ev_body.get("detail"),
                 "fired_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                 "dedup_key": f"{rule.get('id')}:{int(time.time()) // max(60, int(rule.get('cooldown_sec') or 3600))}",
             }

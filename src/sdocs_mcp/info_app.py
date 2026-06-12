@@ -37,10 +37,11 @@ from sdocs_mcp.http_access_log import install_access_logging
 from sdocs_mcp.mcp_telemetry import mcp_http_requests_total, wrap_mcp_http_app
 from sdocs_mcp.mail_tools import _imap_user, mail_imap_verify, mail_smtp_send
 from sdocs_mcp.mtls import resolve_mcp_mtls_uvicorn_kwargs
-from sdocs_mcp.opensearch_tools import connect_opensearch
+from sdocs_mcp.opensearch_tools import close_opensearch_client, connect_opensearch
 from sdocs_mcp.postgres_tools import postgres_allowlisted_query_catalog
 from sdocs_mcp.redis_tools import redis_ping, redis_setex
 from sdocs_mcp.alerts_evaluator import rule_ui_statuses
+from sdocs_mcp.alerts_notify import notify_log_snapshot
 from sdocs_mcp.alerts_kafka_resolve import alerts_kafka_ready, resolve_alerts_kafka
 from sdocs_mcp.alerts_kafka_sync import is_alert_leader, publish_rules_snapshot, start_alerts_kafka_sync, stop_alerts_kafka_sync
 from sdocs_mcp.alerts_mcp_sources import list_sources
@@ -478,7 +479,10 @@ def _check_opensearch(cfg: AppConfig) -> dict[str, Any]:
     try:
         m = cfg.modules.opensearch
         client = connect_opensearch(m)
-        h = client.cluster.health()
+        try:
+            h = client.cluster.health()
+        finally:
+            close_opensearch_client(client)
         dt_ms = int((time.perf_counter() - t0) * 1000)
         return {"ok": True, "detail": "cluster.health()", "cluster": h.get("cluster_name"), "status": h.get("status"), "latency_ms": dt_ms}
     except Exception as e:
@@ -858,6 +862,7 @@ async def api_alerts_status(req: Request) -> JSONResponse:
         cfg = _cfg()
         ready, kafka_src = alerts_kafka_ready(cfg)
         ok = True
+        notify = cfg.modules.alerting.notify
         return JSONResponse(
             {
                 "leader": is_alert_leader(),
@@ -866,8 +871,32 @@ async def api_alerts_status(req: Request) -> JSONResponse:
                 "alerting_kafka_ready": ready,
                 "rules": rule_ui_statuses(cfg),
                 "store_revision": alerts_snapshot().get("revision"),
+                "notify_defaults": {
+                    "default_channel": notify.default_channel,
+                    "webhook_configured": bool((notify.webhook_url or "").strip()),
+                    "telegram_configured": bool(
+                        (notify.telegram_chat_id or "").strip()
+                        and (
+                            (notify.telegram_bot_token or "").strip()
+                            or (notify.telegram_bot_token_env or "").strip()
+                        )
+                    ),
+                    "mail_enabled": cfg.modules.mail.enabled,
+                },
             }
         )
+    finally:
+        _record_request_timing(started, ok)
+
+
+@web_router.get("/api/alerts/notify-log")
+async def api_alerts_notify_log(req: Request, limit: int = 50) -> JSONResponse:
+    started = time.perf_counter()
+    ok = False
+    try:
+        _secure_api(req, "alerts_notify_log")
+        ok = True
+        return JSONResponse({"entries": notify_log_snapshot(limit)})
     finally:
         _record_request_timing(started, ok)
 
@@ -1235,12 +1264,15 @@ async def api_seed(req: Request) -> JSONResponse:
                 m = cfg.modules.opensearch
                 client = connect_opensearch(m)
                 doc = {"event": "seed", "ts": time.time(), "source": "sdocs-mcp-ui"}
-                resp = client.index(
-                    index="demo-mcp",
-                    id=f"seed-{int(time.time())}",
-                    body=doc,
-                    refresh="true",
-                )
+                try:
+                    resp = client.index(
+                        index="demo-mcp",
+                        id=f"seed-{int(time.time())}",
+                        body=doc,
+                        refresh="true",
+                    )
+                finally:
+                    close_opensearch_client(client)
                 report["opensearch"] = {
                     "ok": True,
                     "index": resp.get("_index"),

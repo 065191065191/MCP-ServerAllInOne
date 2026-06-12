@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Literal, Self
 
 import yaml
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from sdocs_mcp.backend_tls import validate_client_mtls_triplet_files
 from sdocs_mcp.postgres_allowlist_sql import normalize_and_validate_allowlisted_sql
@@ -427,6 +427,30 @@ class SshModuleConfig(BaseModel):
         return self
 
 
+class AlertingNotifyConfig(BaseModel):
+    """
+    Куда слать сработавшие алерты. Канал и получателя можно переопределить в каждом правиле
+    (rule.notify_channel / rule.notify_target). email использует modules.mail (SMTP).
+    """
+
+    default_channel: str = "email"  # email | webhook | telegram | none
+    webhook_url: str = ""
+    webhook_timeout_seconds: int = Field(default=10, ge=1, le=120)
+    telegram_bot_token: str = ""
+    telegram_bot_token_env: str = ""
+    telegram_chat_id: str = ""
+    telegram_api_base: str = "https://api.telegram.org"
+
+    @field_validator("default_channel")
+    @classmethod
+    def _channel_known(cls, v: str) -> str:
+        allowed = {"email", "webhook", "telegram", "none"}
+        vv = (v or "email").strip().lower()
+        if vv not in allowed:
+            raise ValueError(f"default_channel must be one of {sorted(allowed)}")
+        return vv
+
+
 class AlertingModuleConfig(BaseModel):
     """
     Alert между подами SDocsMCP.
@@ -442,6 +466,7 @@ class AlertingModuleConfig(BaseModel):
             allow_produce=True,
         )
     )
+    notify: AlertingNotifyConfig = Field(default_factory=AlertingNotifyConfig)
 
     @model_validator(mode="after")
     def _alerting_kafka_when_enabled(self) -> Self:

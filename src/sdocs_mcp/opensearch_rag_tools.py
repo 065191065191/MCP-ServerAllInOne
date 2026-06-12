@@ -9,7 +9,7 @@ from typing import Any
 from opensearchpy.exceptions import OpenSearchException
 
 from sdocs_mcp.config import OpenSearchModuleConfig, OpenSearchRagConfig
-from sdocs_mcp.opensearch_tools import connect_opensearch
+from sdocs_mcp.opensearch_tools import close_opensearch_client, connect_opensearch
 
 _DOC_ID_RE = re.compile(r"^[-_a-zA-Z0-9]{1,128}$")
 
@@ -101,16 +101,19 @@ def opensearch_rag_stats(cfg: OpenSearchModuleConfig) -> str:
     client = connect_opensearch(cfg)
     r = cfg.rag
     out: dict[str, Any] = {}
-    for idx in r.index_allowlist:
-        try:
-            resp = client.count(
-                index=idx,
-                ignore_unavailable=True,
-                body={"query": {"term": {r.source_field: r.source_tag}}},
-            )
-            out[idx] = {"count": int(resp.get("count", 0)), "filter_source": r.source_tag}
-        except OpenSearchException as e:
-            out[idx] = {"error": str(e)}
+    try:
+        for idx in r.index_allowlist:
+            try:
+                resp = client.count(
+                    index=idx,
+                    ignore_unavailable=True,
+                    body={"query": {"term": {r.source_field: r.source_tag}}},
+                )
+                out[idx] = {"count": int(resp.get("count", 0)), "filter_source": r.source_tag}
+            except OpenSearchException as e:
+                out[idx] = {"error": str(e)}
+    finally:
+        close_opensearch_client(client)
     return json.dumps(out, indent=2)
 
 
@@ -160,50 +163,53 @@ def opensearch_rag_store(
     meta_s = _normalize_metadata(r, metadata)
 
     client = connect_opensearch(cfg)
-    _ensure_index(client, cfg, index)
-    if r.max_docs_per_index > 0:
+    try:
+        _ensure_index(client, cfg, index)
+        if r.max_docs_per_index > 0:
+            try:
+                cnt = int(
+                    client.count(
+                        index=index,
+                        body={"query": {"term": {r.source_field: r.source_tag}}},
+                    ).get("count", 0)
+                )
+            except OpenSearchException as e:
+                return json.dumps({"error": str(e), "phase": "count"}, indent=2)
+            if cnt >= r.max_docs_per_index:
+                raise PermissionError(
+                    f"лимит документов в индексе ({r.max_docs_per_index}) достигнут; удалите старые или поднимите max_docs_per_index"
+                )
+
+        body: dict[str, Any] = {
+            r.text_field: text,
+            r.source_field: r.source_tag,
+            r.ingested_at_field: datetime.now(UTC).isoformat(),
+        }
+        if tit:
+            body[r.title_field] = tit
+        if sid:
+            body[r.session_id_field] = sid
+        if meta_s:
+            body[r.metadata_json_field] = meta_s
+
         try:
-            cnt = int(
-                client.count(
-                    index=index,
-                    body={"query": {"term": {r.source_field: r.source_tag}}},
-                ).get("count", 0)
+            if doc_id:
+                resp = client.index(index=index, id=doc_id, body=body, refresh="wait_for")
+            else:
+                resp = client.index(index=index, body=body, refresh="wait_for")
+            return json.dumps(
+                {
+                    "ok": True,
+                    "index": resp.get("_index"),
+                    "id": resp.get("_id"),
+                    "result": resp.get("result"),
+                },
+                indent=2,
             )
         except OpenSearchException as e:
-            return json.dumps({"error": str(e), "phase": "count"}, indent=2)
-        if cnt >= r.max_docs_per_index:
-            raise PermissionError(
-                f"лимит документов в индексе ({r.max_docs_per_index}) достигнут; удалите старые или поднимите max_docs_per_index"
-            )
-
-    body: dict[str, Any] = {
-        r.text_field: text,
-        r.source_field: r.source_tag,
-        r.ingested_at_field: datetime.now(UTC).isoformat(),
-    }
-    if tit:
-        body[r.title_field] = tit
-    if sid:
-        body[r.session_id_field] = sid
-    if meta_s:
-        body[r.metadata_json_field] = meta_s
-
-    try:
-        if doc_id:
-            resp = client.index(index=index, id=doc_id, body=body, refresh="wait_for")
-        else:
-            resp = client.index(index=index, body=body, refresh="wait_for")
-        return json.dumps(
-            {
-                "ok": True,
-                "index": resp.get("_index"),
-                "id": resp.get("_id"),
-                "result": resp.get("result"),
-            },
-            indent=2,
-        )
-    except OpenSearchException as e:
-        return json.dumps({"error": str(e)}, indent=2)
+            return json.dumps({"error": str(e)}, indent=2)
+    finally:
+        close_opensearch_client(client)
 
 
 def opensearch_rag_search(
@@ -293,6 +299,8 @@ def opensearch_rag_search(
         )
     except OpenSearchException as e:
         return json.dumps({"error": str(e)}, indent=2)
+    finally:
+        close_opensearch_client(client)
 
 
 def opensearch_rag_delete_document(cfg: OpenSearchModuleConfig, index: str, doc_id: str) -> str:
@@ -310,3 +318,5 @@ def opensearch_rag_delete_document(cfg: OpenSearchModuleConfig, index: str, doc_
         return json.dumps({"ok": resp.get("result") in ("deleted", "not_found"), "result": resp}, indent=2, default=str)
     except OpenSearchException as e:
         return json.dumps({"error": str(e)}, indent=2)
+    finally:
+        close_opensearch_client(client)

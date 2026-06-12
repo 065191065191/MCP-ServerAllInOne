@@ -64,6 +64,7 @@
 | [`docs/EXECUTIVE_ONEPAGER.md`](docs/EXECUTIVE_ONEPAGER.md) | Сценарий и заметки к показу one-pager |
 | [`docs/OFFLINE_AND_PROXY_INSTALL.md`](docs/OFFLINE_AND_PROXY_INSTALL.md) | Закрытый контур, прокси, wheelhouse, секреты BuildKit |
 | [`docs/TOOL_CALL_AUDIT.md`](docs/TOOL_CALL_AUDIT.md) | Аудит вызовов MCP tools в OpenSearch |
+| [`docs/ALERTING.md`](docs/ALERTING.md) | Алертинг по логам OpenSearch: правила, доставка, журнал |
 | [`docs/SSH_SCALE.md`](docs/SSH_SCALE.md) | Много SSH-хостов: лимиты, `SDOCS_MCP_SSH_HOSTS_FILE`, CSV |
 | [`docs/INSTALL_AND_RELEASE.md`](docs/INSTALL_AND_RELEASE.md) | Релизные архивы и установка |
 | [`s3-mcp/README.md`](s3-mcp/README.md) | **S3 MCP**: env, tools, curl |
@@ -205,6 +206,7 @@ sdocs-mcp
 - **Почта** — IMAP/SMTP; пароли через env.
 - **Prometheus** — HTTP API; по умолчанию **`truncate_responses: false`** (крупные ответы не режутся на стороне MCP).
 - **OpenSearch** — cluster/cat/search/count; по умолчанию без деструктивных API (`allow_write: false`). Опционально **RAG** в allowlist-индексах.
+- **Алертинг** — правила по логам OpenSearch в UI (`/alerts-page`), доставка email/webhook/telegram, журнал. Проверяет только лидер (без дублей на нескольких подах). Детали: [`docs/ALERTING.md`](docs/ALERTING.md).
 
 Детали: [`docs/CAPABILITIES.md`](docs/CAPABILITIES.md).
 
@@ -280,4 +282,4 @@ export SDOCS_MCP_METRICS_RATE_LIMIT_RPM="120"
 
 **Автор:** Gos Stepan Ulievich.
 
-Версия: **`pyproject.toml`** → **`src/sdocs_mcp/__init__.py`** → метаданные UI; теги образов в **`deploy/*`**. Текущая: **0.6.1**. При изменениях — SemVer, обновление **`CHANGELOG.md`**, коммит. Пользовательская документация — **на русском** (`README.md`, `CHANGELOG.md`).
+Версия: **`pyproject.toml`** → **`src/sdocs_mcp/__init__.py`** → метаданные UI; теги образов в **`deploy/*`**. Текущая: **0.7.3**. При изменениях — SemVer, обновление **`CHANGELOG.md`**, коммит. Пользовательская документация — **на русском** (`README.md`, `CHANGELOG.md`).

@@ -62,6 +62,14 @@ modules:
         - sdocs.alerts.events
         - sdocs.alerts.lock
       allow_produce: true
+    # Куда слать сработавшие алерты (канал по умолчанию; в правиле можно переопределить)
+    notify:
+      default_channel: email   # email | webhook | telegram | none
+      webhook_url: ""          # если в правиле notify_channel=webhook и пустой notify_target
+      webhook_timeout_seconds: 10
+      telegram_bot_token_env: TELEGRAM_BOT_TOKEN
+      telegram_chat_id: ""     # или в правиле notify_target
+    # email использует modules.mail (SMTP ниже)
 
   # ───── PostgreSQL ───────────────────────────────────────────────
   # Зачем: диагностика и разрешённые SELECT-ы по allowlisted_queries.

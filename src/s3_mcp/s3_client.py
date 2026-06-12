@@ -199,6 +199,14 @@ class S3Client:
             full_url += "?" + qs
         return full_url, path, qs
 
+    @staticmethod
+    def _safe_close(resp: Any) -> None:
+        """Закрыть ответ/HTTPError, освободив сокет (иначе утечка fd/памяти)."""
+        try:
+            resp.close()
+        except Exception:
+            pass
+
     def _raw_req(
         self,
         method: str,
@@ -231,17 +239,24 @@ class S3Client:
     ) -> bytes | None:
         try:
             resp = self._raw_req(method, key_path, body, query_params)
-            return resp.read()
-        except urllib.error.HTTPError:
+        except urllib.error.HTTPError as e:
+            try:
+                e.close()
+            except Exception:
+                pass
             return None
+        try:
+            return resp.read()
+        finally:
+            resp.close()
 
     def _head_response(
         self,
         key_path: str,
-    ) -> tuple[urllib.response.addinfourl | None, int | None, str | None]:
-        """HEAD: (response, http_code, error_detail)."""
+    ) -> tuple[dict[str, str] | None, int | None, str | None]:
+        """HEAD: (headers, http_code, error_detail). Соединение закрывается сразу."""
         try:
-            return self._raw_req("HEAD", key_path), None, None
+            resp = self._raw_req("HEAD", key_path)
         except urllib.error.HTTPError as e:
             detail = ""
             if e.fp:
@@ -249,9 +264,18 @@ class S3Client:
                     detail = e.fp.read().decode("utf-8", errors="replace")[:300]
                 except Exception:
                     pass
+            try:
+                e.close()
+            except Exception:
+                pass
             return None, e.code, detail or e.reason
         except Exception as e:
             return None, None, str(e)
+        try:
+            headers = {k: v for k, v in resp.headers.items()}
+            return headers, None, None
+        finally:
+            resp.close()
 
     def list_all_buckets(self) -> list[str]:
         all_buckets: list[str] = []
@@ -297,10 +321,10 @@ class S3Client:
 
     def get_bucket_stats_quick(self, bucket: str) -> tuple[int, int] | None:
         """Ceph RGW: X-RGW-Object-Count, X-RGW-Bytes-Used."""
-        resp, code, _ = self._head_response(f"/{bucket}/")
-        if resp is not None:
-            obj_count = resp.headers.get("X-RGW-Object-Count")
-            bytes_used = resp.headers.get("X-RGW-Bytes-Used")
+        headers, code, _ = self._head_response(f"/{bucket}/")
+        if headers is not None:
+            obj_count = headers.get("X-RGW-Object-Count")
+            bytes_used = headers.get("X-RGW-Bytes-Used")
             if obj_count is not None:
                 return int(obj_count), int(bytes_used) if bytes_used else 0
             return 0, 0
@@ -340,17 +364,19 @@ class S3Client:
         body = b"0" * (1024 * 1024)
 
         try:
-            self._raw_req("PUT", f"{bucket}/{test_key}", body=body)
-        except urllib.error.HTTPError:
+            self._raw_req("PUT", f"{bucket}/{test_key}", body=body).close()
+        except urllib.error.HTTPError as e:
+            self._safe_close(e)
             return False, "PUT failed"
         except Exception as e:
             return False, f"PUT error: {e}"
 
         try:
-            self._raw_req("HEAD", f"{bucket}/{test_key}")
-        except urllib.error.HTTPError:
+            self._raw_req("HEAD", f"{bucket}/{test_key}").close()
+        except urllib.error.HTTPError as e:
+            self._safe_close(e)
             try:
-                self._raw_req("DELETE", f"{bucket}/{test_key}")
+                self._raw_req("DELETE", f"{bucket}/{test_key}").close()
             except Exception:
                 pass
             return False, "HEAD failed"
@@ -358,8 +384,9 @@ class S3Client:
             return False, f"HEAD error: {e}"
 
         try:
-            self._raw_req("DELETE", f"{bucket}/{test_key}")
-        except urllib.error.HTTPError:
+            self._raw_req("DELETE", f"{bucket}/{test_key}").close()
+        except urllib.error.HTTPError as e:
+            self._safe_close(e)
             return False, "DELETE failed"
         except Exception as e:
             return False, f"DELETE error: {e}"
@@ -374,10 +401,9 @@ class S3Client:
         """
         object_key = key.lstrip("/")
         object_path = f"{bucket}/{object_key}"
-        resp, code, detail = self._head_response(object_path)
+        headers, code, detail = self._head_response(object_path)
 
-        if resp is not None:
-            headers = resp.headers
+        if headers is not None:
             size_raw = headers.get("Content-Length", "0")
             try:
                 size_bytes = int(size_raw)
@@ -417,7 +443,7 @@ class S3Client:
     def put_object(self, bucket: str, key: str, body: bytes) -> dict[str, Any]:
         """PUT объекта. Возвращает метаданные, не эхо тела."""
         object_key = key.lstrip("/")
-        self._raw_req("PUT", f"{bucket}/{object_key}", body=body)
+        self._raw_req("PUT", f"{bucket}/{object_key}", body=body).close()
         meta = self.get_object_metadata(bucket, object_key)
         meta["written"] = True
         meta["bytes_written"] = len(body)
@@ -429,7 +455,7 @@ class S3Client:
         before = self.get_object_metadata(bucket, object_key)
         if not before.get("exists"):
             return {"ok": False, "deleted": False, "bucket": bucket, "key": object_key, "reason": "not_found"}
-        self._raw_req("DELETE", f"{bucket}/{object_key}")
+        self._raw_req("DELETE", f"{bucket}/{object_key}").close()
         return {
             "ok": True,
             "deleted": True,
